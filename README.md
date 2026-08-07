@@ -2,7 +2,7 @@
 
 Description
 -----------
-Ce dépôt contient un projet « mon-honeypot » conçu pour capturer des connexions SSH non autorisées et fournir un tableau de bord web pour visualiser les événements collectés. Le projet combine un composant d'écoute SSH (capture) avec une interface web (dashboard).
+Ce dépôt contient un projet honeypot conçu pour capturer des connexions SSH non autorisées et fournir un tableau de bord web pour visualiser les événements collectés. Le projet combine un composant d'écoute SSH (capture) avec une interface web (dashboard).
 
 Principales fonctionnalités
 ---------------------------
