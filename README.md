@@ -1,117 +1,118 @@
-# Winnie the Pooh — Mon Honeypot
+# Winnie the Pooh — My Honeypot
 
 Description
 -----------
-Ce dépôt contient un projet honeypot conçu pour capturer des connexions SSH non autorisées et fournir un tableau de bord web pour visualiser les événements collectés. Le projet combine un composant d'écoute SSH (capture) avec une interface web (dashboard).
+This repository contains a honeypot project designed to capture unauthorized SSH connections and provide a web dashboard to visualize collected events. The project combines an SSH listener/capture component with a web interface (dashboard).
 
-Principales fonctionnalités
----------------------------
-- Capture et journalisation des connexions SSH
-- Stockage local des événements dans `data/` (SQLite)
-- Dashboard web pour visualiser les attaques (templates + fichiers statiques)
+Key Features
+------------
+- Capture and logging of SSH connection attempts
+- Local storage of events in `data/` (SQLite)
+- Web dashboard to visualize attacks (templates + static assets)
 
-Structure du dépôt
-------------------
-- `.git/` et `.gitignore` : gestion de version
-- `venv/` : environnement virtuel (ne pas committer)
-- `data/` : base de données et fichiers générés (`honeypot.db` ou équivalent)
-- `src/` : code source principal
-	- `honeypot.py` : logic d'écoute et capture (ex: Paramiko)
-	- `database.py` : helpers pour la persistance (SQLite)
-	- `web_app.py` : application web (Flask / FastAPI)
-- `static/` : fichiers statiques du dashboard (CSS, JS)
-- `templates/` : templates HTML du dashboard
-- `requirements/` ou `requirements.txt` : dépendances Python
+Repository Structure
+--------------------
+- `.git/` and `.gitignore`: version control
+- `venv/`: virtual environment (do not commit)
+- `data/`: database and generated files (e.g. `honeypot.db`)
+- `src/`: main source code
+  - `honeypot.py`: listener/capture logic (e.g. using Paramiko)
+  - `database.py`: persistence helpers (SQLite)
+  - `web_app.py`: web application (Flask / FastAPI)
+- `static/`: dashboard static files (CSS, JS)
+- `templates/`: dashboard HTML templates
+- `requirements/` or `requirements.txt`: Python dependencies
 
-Prérequis
----------
-- Python 3.8+ installé
-- `pip` pour installer les dépendances
-- (Recommandé) Créer un environnement virtuel pour isoler les dépendances
+Requirements
+------------
+- Python 3.8+ installed
+- `pip` to install dependencies
+- (Recommended) Create a virtual environment to isolate dependencies
 
-Installation rapide
-------------------
-1. Créer et activer un environnement virtuel :
+Quick Setup
+-----------
+1. Create and activate a virtual environment:
 
-	 - Unix / macOS:
+   - Unix / macOS:
 
-		 ```bash
-		 python3 -m venv venv
-		 source venv/bin/activate
-		 ```
+     ```bash
+     python3 -m venv venv
+     source venv/bin/activate
+     ```
 
-	 - Windows (PowerShell):
+   - Windows (PowerShell):
 
-		 ```powershell
-		 python -m venv venv
-		 .\venv\Scripts\Activate.ps1
-		 ```
+     ```powershell
+     python -m venv venv
+     .\venv\Scripts\Activate.ps1
+     ```
 
-2. Installer les dépendances :
+2. Install dependencies:
 
-	 - Si `requirements.txt` est à la racine :
+   - If `requirements.txt` is at the project root:
 
-		 ```bash
-		 pip install -r requirements.txt
-		 ```
+     ```bash
+     pip install -r requirements.txt
+     ```
 
-	 - Si les requirements sont dans le dossier `requirements/` :
+   - If dependencies are in the `requirements/` folder:
 
-		 ```bash
-		 pip install -r requirements/requirements.txt
-		 ```
+     ```bash
+     pip install -r requirements/requirements.txt
+     ```
 
 Configuration
 -------------
-- Fichier de base de données attendu : `data/honeypot.db` (ou réglable dans `src/database.py`)
-- Variables d'environnement possibles :
-	- `FLASK_ENV` / `APP_ENV` pour le mode de l'application web
-	- `DATABASE_URL` si vous souhaitez pointer vers une autre DB
+- Expected database file: `data/honeypot.db` (configurable in `src/database.py`)
+- Environment variables you may use:
+  - `FLASK_ENV` / `APP_ENV` for the web app mode
+  - `DATABASE_URL` if you want to point to a different database
 
 Usage
 -----
-- Lancer le capteur SSH (exemple) :
+- Start the SSH listener (example):
 
-	```bash
-	python src/honeypot.py
-	```
+  ```bash
+  python src/honeypot.py
+  ```
 
-- Lancer le dashboard web (exemple Flask) :
+- Start the web dashboard (Flask example):
 
-	```bash
-	# depuis la racine du projet
-	export FLASK_APP=src.web_app
-	flask run --host=0.0.0.0 --port=5000
-	```
+  ```bash
+  # from the project root
+  export FLASK_APP=src.web_app
+  flask run --host=0.0.0.0 --port=5000
+  ```
 
-	(Sous Windows PowerShell, remplacez `export` par `setx` ou utilisez la syntaxe appropriée)
+  (On Windows PowerShell, replace `export` with the appropriate command or set the environment variable before running Flask.)
 
 Tests
 -----
-- Si des tests sont présents, lancez :
+- If tests are available, run:
 
-	```bash
-	pytest
-	```
+  ```bash
+  pytest
+  ```
 
-Bonnes pratiques
-----------------
-- Ne commitez pas `venv/` ni `data/` (ajoutés normalement à `.gitignore`)
-- Sécurisez l'accès au dashboard et à la base de données si vous exposez l'application
+Best Practices
+--------------
+- Do not commit `venv/` or `data/` (these should be in `.gitignore`)
+- Secure access to the dashboard and the database if you expose the application publicly
 
-Contribuer
-----------
-- Forkez le dépôt, créez une branche feature, puis ouvrez une pull request.
-- Documentez tout nouveau comportement et ajoutez des tests lorsque possible.
+Contributing
+------------
+- Fork the repository, create a feature branch, and open a pull request.
+- Document new behavior and add tests when possible.
 
-Licence
+License
 -------
-Aucune licence spécifiée. Ajouter un fichier `LICENSE` si vous souhaitez en définir une (MIT recommandée pour les prototypes).
+No license specified. Add a `LICENSE` file if you want to define one (MIT is commonly used for prototypes).
 
 Contact
 -------
-Pour questions ou contributions : ouvre une issue ou contacte l'auteur du dépôt.
+For questions or contributions: open an issue or contact the repository owner.
 
-Remarques
----------
-Ce README a été rédigé automatiquement à partir de la structure du dossier. Adaptez les commandes et chemins selon vos scripts réels (par ex. si l'app web s'appelle différemment ou si les dépendances sont rangées autrement).
+Notes
+-----
+This README was generated from the repository structure. Adjust commands and paths to match your actual scripts (for example, if the web app module has a different name or dependencies are organized differently).
+
