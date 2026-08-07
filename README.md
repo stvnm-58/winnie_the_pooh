@@ -86,12 +86,6 @@ Usage
 
   (On Windows PowerShell, replace `export` with the appropriate command or set the environment variable before running Flask.)
 
-Tests
------
-- If tests are available, run:
-
-  ```bash
-  pytest
   ```
 
 Best Practices
@@ -99,20 +93,7 @@ Best Practices
 - Do not commit `venv/` or `data/` (these should be in `.gitignore`)
 - Secure access to the dashboard and the database if you expose the application publicly
 
-Contributing
-------------
-- Fork the repository, create a feature branch, and open a pull request.
-- Document new behavior and add tests when possible.
-
-License
--------
-No license specified. Add a `LICENSE` file if you want to define one (MIT is commonly used for prototypes).
 
 Contact
 -------
 For questions or contributions: open an issue or contact the repository owner.
-
-Notes
------
-This README was generated from the repository structure. Adjust commands and paths to match your actual scripts (for example, if the web app module has a different name or dependencies are organized differently).
-
