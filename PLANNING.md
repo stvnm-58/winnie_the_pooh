@@ -4,7 +4,7 @@ Ce document présente la roadmap globale du projet, structurée en phases logiqu
 
 ## Calendrier des phases (High-Level Plan)
 
-| Phase | Nom de la phase | Objectifs principaux | Durée estimée |
+| N° | Phase | Objectifs principaux | Durée estimée |
 | :--- | :--- | :--- | :--- |
 | **1** | **Setup & Infrastructure** | Initialisation du repo, config Docker, setup Python/Angular. | 3 jours |
 | **2** | **Core Honeypot (Back)** | Développement du serveur SSH, logs, persistance des données. | 7 jours |
