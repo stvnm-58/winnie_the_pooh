@@ -1,4 +1,4 @@
-# Honeypot SSH Dashboard - Rapport d'Étape 1
+# Honeypot SSH Dashboard - PROCESS
 
 ## 0. Constitution de l'équipe et rôles
 En tant que développeur solopreneur sur ce projet, j'occupe l'ensemble des rôles nécessaires au cycle de vie du logiciel :
