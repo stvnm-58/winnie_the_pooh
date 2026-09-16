@@ -135,6 +135,7 @@ La base de données contient une unique table relationnelle nommée attacks :
 
 ### 4.1 Capture et persistance d'une attaque SSH
 
+```text
 [ Attaquant ]          [ Honeypot Core (Paramiko) ]          [ Base de données (SQLite) ]
       │                              │                                    │
       │── 1. Connexion TCP (p. 2222) ────────────────>│                     │
@@ -147,10 +148,11 @@ La base de données contient une unique table relationnelle nommée attacks :
       │<── 6. Fermeture / Rejet ─────│                                    │
       │    (Authentification échouée)│                                    │
 
-
+```
 
 ### 4.2 Affichage et actualisation du Dashboard
 
+```text
 [ Administrateur ]      [ Front-end (SPA) ]           [ API Flask (web_app.py) ]      [ Base de données (SQLite) ]
        │                         │                               │                                 │
        │── 1. Ouvre le Dashboard ─>│                             │                                 │
@@ -161,7 +163,7 @@ La base de données contient une unique table relationnelle nommée attacks :
        │                         │                               │<── 5. Retourne la liste (JSON) ─│
        │                         │<── 6. Réponse HTTP 200 (JSON) ─│                                 │
        │<── 7. Rendu du tableau ─│                               │                                 │
-
+```
 
 ---
 
@@ -171,12 +173,12 @@ La base de données contient une unique table relationnelle nommée attacks :
 * **API de Géolocalisation IP (ex: *ipapi.co*)** : Utilisée optionnellement pour enrichir les logs IP avec le pays d'origine de l'attaque.
 
 ### 5.2 Endpoints de l'API Interne (Flask)
-
+```text
 | Chemin URL (`Path`) | Méthode HTTP | Format d'entrée | Format de sortie | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `/api/attacks` | `GET` | Aucun | JSON (Liste d'objets) | Récupère toutes les tentatives d'authentification SSH. |
 | `/api/stats` | `GET` | Aucun | JSON (Objet) | Fournit les indicateurs clés (total attaques, IPs uniques). |
-
+```
 ---
 
 ## 6. Stratégies SCM et QA
