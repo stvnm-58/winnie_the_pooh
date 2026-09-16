@@ -64,7 +64,7 @@
 ---
 
 ## 2. Architecture Système 
-
+```text
 [ Attaquant / Bot ]
           │
           │ 1. Tentative de connexion SSH (Port 2222)
@@ -98,7 +98,7 @@
           │ 5. Affichage dynamique en temps réel
           │
     [ Administrateur / Utilisateur ]
-
+```
 ---
 
 ## 3. Composants, Classes et Conception de la Base de Données
