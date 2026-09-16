@@ -59,7 +59,9 @@
 |  +-------------------------------------------------------------------+  |
 |                                                                         |
 +-------------------------------------------------------------------------+
+```
 
+---
 
 ## 2. Architecture Système 
 
@@ -96,3 +98,105 @@
           │ 5. Affichage dynamique en temps réel
           │
     [ Administrateur / Utilisateur ]
+
+---
+
+## 3. Composants, Classes et Conception de la Base de Données
+
+### 3.1 Description des Composants
+
+    HoneypotServer (Python / Paramiko) : Écoute sur le port 2222, gère les bannières SSH, intercepte les tentatives d'authentification par mot de passe et déclenche l'écriture en base.
+
+    DatabaseManager (database.py) : Encapsule les requêtes SQL vers SQLite (init_db, log_attack, get_all_attacks).
+
+    API Flask (web_app.py) : Expose les routes REST pour communiquer les données du backend au front-end.
+
+    Composants Front-end : En-tête de statut, cartes de statistiques (KPIs) et tableau dynamique de monitoring.
+
+### 3.2 Schéma de la Base de Données (SQLite)
+
+La base de données contient une unique table relationnelle nommée attacks :
+
+    Table : attacks
+
+        id : INTEGER (Clé primaire, auto-incrémentée)
+
+        timestamp : DATETIME (Horodatage de l'attaque, défaut : CURRENT_TIMESTAMP)
+
+        ip_address : TEXT (Adresse IP source de l'attaquant)
+
+        username : TEXT (Nom d'utilisateur tenté)
+
+        password : TEXT (Mot de passe tenté)
+
+---
+
+## 4. Diagrammes de Séquence
+
+### 4.1 Capture et persistance d'une attaque SSH
+
+[ Attaquant ]          [ Honeypot Core (Paramiko) ]          [ Base de données (SQLite) ]
+      │                              │                                    │
+      │── 1. Connexion TCP (p. 2222) ────────────────>│                     │
+      │                              │                                    │
+      │── 2. Saisie User / Password ─>│                                    │
+      │                              │── 3. log_attack(ip, user, pwd) ──>│
+      │                              │                                    │
+      │                              │    4. INSERT INTO attacks ... ─────┤
+      │                              │<── 5. Confirmation d'écriture ─────│
+      │<── 6. Fermeture / Rejet ─────│                                    │
+      │    (Authentification échouée)│                                    │
+
+
+
+### 4.2 Affichage et actualisation du Dashboard
+
+[ Administrateur ]      [ Front-end (SPA) ]           [ API Flask (web_app.py) ]      [ Base de données (SQLite) ]
+       │                         │                               │                                 │
+       │── 1. Ouvre le Dashboard ─>│                             │                                 │
+       │                         │── 2. GET /api/attacks ───────>│                                 │
+       │                         │                               │── 3. get_all_attacks() ────────>│
+       │                         │                               │                                 │
+       │                         │                               │    4. SELECT * FROM attacks ────┤
+       │                         │                               │<── 5. Retourne la liste (JSON) ─│
+       │                         │<── 6. Réponse HTTP 200 (JSON) ─│                                 │
+       │<── 7. Rendu du tableau ─│                               │                                 │
+
+
+---
+
+## 5. Spécifications des API
+
+### 5.1 API Externes
+* **API de Géolocalisation IP (ex: *ipapi.co*)** : Utilisée optionnellement pour enrichir les logs IP avec le pays d'origine de l'attaque.
+
+### 5.2 Endpoints de l'API Interne (Flask)
+
+| Chemin URL (`Path`) | Méthode HTTP | Format d'entrée | Format de sortie | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `/api/attacks` | `GET` | Aucun | JSON (Liste d'objets) | Récupère toutes les tentatives d'authentification SSH. |
+| `/api/stats` | `GET` | Aucun | JSON (Objet) | Fournit les indicateurs clés (total attaques, IPs uniques). |
+
+---
+
+## 6. Stratégies SCM et QA
+
+### 6.1 Stratégie SCM (Software Configuration Management)
+* **Outil :** Git & GitHub.
+* **Branches :** `main` (production stable), `development` (intégration), et `feature/*` (fonctionnalités isolées).
+* **Processus :** Commits atomiques réguliers, validation par Pull Requests (PR) avant fusion.
+
+### 6.2 Stratégie QA (Quality Assurance)
+* **Types de tests :**
+  * *Tests unitaires :* Validation des fonctions d'insertion SQL et de l'interception Paramiko.
+  * *Tests d'intégration / API :* Vérification des endpoints Flask.
+  * *Tests fonctionnels :* Simulation manuelle d'une attaque avec un client SSH local (`ssh root@localhost -p 2222`).
+* **Outils :** `pytest` pour le back-end, Postman / `curl` pour l'API.
+
+---
+
+## 7. Justifications Techniques
+* **Python & Paramiko :** Choisi pour sa rapidité de développement, sa flexibilité dans la manipulation des sockets réseau et son module robuste d'émulation de protocole SSH.
+* **Flask :** Léger, minimaliste et idéal pour monter rapidement une API REST sans la lourdeur d'un framework comme Django.
+* **SQLite :** Solution embarquée parfaite pour un MVP, évitant la configuration d'un serveur de base de données externe tout en garantissant la persistance des données.
+* **Angular / SPA :** Choisi pour structurer proprement le front-end du dashboard de monitoring avec une architecture modulaire et rigoureuse.
