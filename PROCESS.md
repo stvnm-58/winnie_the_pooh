@@ -4,7 +4,7 @@
 En tant que développeur solopreneur sur ce projet, j'occupe l'ensemble des rôles nécessaires au cycle de vie du logiciel :
 - **Product Owner :** Définition du périmètre du MVP et priorisation des fonctionnalités.
 - **Backend Developer (Python) :** Conception du serveur SSH, gestion de la persistance des données et de l'analyse des logs.
-- **Frontend Developer (Angular) :** Développement de l'interface de visualisation et des composants interactifs du dashboard.
+- **Frontend Developer (React) :** Développement de l'interface de visualisation et des composants interactifs du dashboard.
 - **DevOps / Sécurité :** Configuration de l'environnement (Docker, WSL), sécurisation de l'infrastructure et déploiement.
 - **Outils de travail :** Git/GitHub (gestion de projet et versioning), VS Code, Docker, Notion (documentation).
 

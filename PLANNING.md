@@ -31,10 +31,10 @@ Ce document présente la roadmap globale du projet, structurée en phases logiqu
 *   Intégration d'un service de géolocalisation pour convertir les IPs en données géographiques (Pays/Ville).
 *   Création des endpoints nécessaires : liste des attaques, statistiques agrégées.
 
-### Phase 4 : Dashboard (Angular) (10 jours)
-*   Initialisation de l'application Angular.
-*   Intégration d'une bibliothèque de graphiques pour visualiser les attaques.
-*   Mise en place de l'interface utilisateur pour consulter la traçabilité des attaques.
+### Phase 4 : Dashboard (React) (10 jours)
+* Initialisation de l'application React (avec Vite).
+* Intégration d'une bibliothèque de graphiques (ex: Recharts ou Chart.js) pour visualiser les attaques.
+* Mise en place de l'interface utilisateur (composants fonctionnels, hooks) pour consulter la traçabilité des attaques..
 
 ### Phase 5 : Tests & Finalisation (5 jours)
 *   Simulation d'attaques (Brute Force) pour valider la capture et l'affichage.
