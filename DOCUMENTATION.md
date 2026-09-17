@@ -138,10 +138,10 @@ La base de données contient une unique table relationnelle nommée attacks :
 ```text
 [ Attaquant ]          [ Honeypot Core (Paramiko) ]          [ Base de données (SQLite) ]
       │                              │                                    │
-      │── 1. Connexion TCP (p. 2222) ────────────────>│                     │
+      │─ 1. Connexion TCP (p. 2222) >│                                    │
       │                              │                                    │
-      │── 2. Saisie User / Password ─>│                                    │
-      │                              │── 3. log_attack(ip, user, pwd) ──>│
+      │── 2. Saisie User / Password >│                                    │
+      │                              │── 3. log_attack(ip, user, pwd) ──> │
       │                              │                                    │
       │                              │    4. INSERT INTO attacks ... ─────┤
       │                              │<── 5. Confirmation d'écriture ─────│
@@ -155,13 +155,13 @@ La base de données contient une unique table relationnelle nommée attacks :
 ```text
 [ Administrateur ]      [ Front-end (SPA) ]           [ API Flask (web_app.py) ]      [ Base de données (SQLite) ]
        │                         │                               │                                 │
-       │── 1. Ouvre le Dashboard ─>│                             │                                 │
+       │─ 1. Ouvre le Dashboard >│                               │                                 │
        │                         │── 2. GET /api/attacks ───────>│                                 │
        │                         │                               │── 3. get_all_attacks() ────────>│
        │                         │                               │                                 │
        │                         │                               │    4. SELECT * FROM attacks ────┤
        │                         │                               │<── 5. Retourne la liste (JSON) ─│
-       │                         │<── 6. Réponse HTTP 200 (JSON) ─│                                 │
+       │                         │<─ 6. Réponse HTTP 200 (JSON) ─│                                 │
        │<── 7. Rendu du tableau ─│                               │                                 │
 ```
 
