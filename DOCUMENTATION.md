@@ -1,5 +1,4 @@
 # Dossier de Conception : Honeypot SSH Modulaire & Dashboard de Surveillance
-*Projet de Fin d'Études (RNCP5)*
 
 ---
 
