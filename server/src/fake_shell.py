@@ -32,6 +32,28 @@ def handle_fake_shell(channel):
                         buffer = buffer[:-1]
                         channel.send(b'\b \b')
                 
+                # Gestion de la touche Tabulation (Autocomplétion)
+                elif char == b'\t':
+                    cmd_str = buffer.decode("utf-8", errors="ignore")
+                    parts = cmd_str.split(" ")
+                    
+                    if len(parts) > 0:
+                        prefix = parts[-1]
+                        choices = virtual_fs.get(current_dir, [])
+                        
+                        if parts[0] == "cd" and len(parts) == 2:
+                            choices = [os.path.basename(d) for d in virtual_fs.keys() if d.startswith("/")]
+                        
+                        matches = [c for c in choices if c.startswith(prefix)]
+                        
+                        if len(matches) == 1:
+                            completion = matches[0][len(prefix):]
+                            buffer += completion.encode("utf-8")
+                            channel.send(completion.encode("utf-8"))
+                        elif len(matches) > 1:
+                            channel.send(b"\r\n" + "  ".join(matches).encode("utf-8") + b"\r\n")
+                            channel.send(f"root@ubuntu:{current_dir}# {cmd_str}".encode("utf-8"))
+
                 # Gestion de la touche Entrée
                 elif char in (b'\n', b'\r'):
                     channel.send(b"\r\n")
@@ -58,23 +80,62 @@ def handle_fake_shell(channel):
                         files = virtual_fs.get(current_dir, [])
                         channel.send("  ".join(files).encode() + b"\r\n")
                         
+                    elif cmd.startswith("mkdir "):
+                        target = cmd.split(" ", 1)[1].strip()
+                        new_dir = os.path.normpath(target if target.startswith("/") else os.path.join(current_dir, target)).replace("\\", "/")
+                        
+                        if new_dir not in virtual_fs:
+                            virtual_fs[new_dir] = []
+                            parent_dir = os.path.dirname(new_dir)
+                            if parent_dir == "": parent_dir = "/"
+                            folder_name = os.path.basename(new_dir)
+                            
+                            parent_files = virtual_fs.setdefault(parent_dir, [])
+                            if folder_name not in parent_files:
+                                parent_files.append(folder_name)
+                        else:
+                            channel.send(f"mkdir: cannot create directory '{target}': File exists\r\n".encode())
+
+                    elif cmd.startswith("touch "):
+                        target = cmd.split(" ", 1)[1].strip()
+                        current_files = virtual_fs.setdefault(current_dir, [])
+                        if target not in current_files:
+                            current_files.append(target)
+
+                    elif cmd.startswith("cat "):
+                        target = cmd.split(" ", 1)[1].strip()
+                        files_in_dir = virtual_fs.get(current_dir, [])
+                        target_path = os.path.normpath(os.path.join(current_dir, target)).replace("\\", "/")
+                        
+                        # Si c'est un fichier présent dans le dossier courant
+                        if target in files_in_dir and target_path not in virtual_fs:
+                            # Contenus simulés pour rendre le honeypot crédible
+                            mock_contents = {
+                                "root.txt": "FLAG{winnie_the_pooh_honey_jar_2026}\r\n",
+                                "config.json": '{\n    "db_host": "127.0.0.1",\n    "db_user": "admin",\n    "secret_token": "a8f5c3e921b"\n}\r\n',
+                                "auth.log": "Sep 29 14:22:10 ubuntu sshd[8412]: Accepted password for root from 10.0.2.15 port 45123 ssh2\r\n",
+                                "id_rsa": "-----BEGIN OPENSSH PRIVATE KEY-----\r\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlw==\r\n-----END OPENSSH PRIVATE KEY-----\r\n"
+                            }
+                            content = mock_contents.get(target, f"# Content of {target}\r\n")
+                            channel.send(content.encode("utf-8"))
+                        elif target_path in virtual_fs:
+                            channel.send(f"cat: {target}: Is a directory\r\n".encode())
+                        else:
+                            channel.send(f"cat: {target}: No such file or directory\r\n".encode())
+
                     elif cmd.startswith("cd "):
                         target = cmd.split(" ", 1)[1].strip()
-                        if target == "..":
-                            if current_dir != "/":
-                                current_dir = os.path.dirname(current_dir)
-                                if current_dir == "": current_dir = "/"
-                        elif target.startswith("/"):
-                            if target in virtual_fs:
-                                current_dir = target
-                            else:
-                                channel.send(f"cd: {target}: No such file or directory\r\n".encode())
+                        if target.startswith("/"):
+                            new_dir = os.path.normpath(target)
                         else:
-                            new_dir = os.path.join(current_dir, target).replace("\\", "/")
-                            if new_dir in virtual_fs:
-                                current_dir = new_dir
-                            else:
-                                channel.send(f"cd: {target}: No such file or directory\r\n".encode())
+                            new_dir = os.path.normpath(os.path.join(current_dir, target))
+                        
+                        new_dir = new_dir.replace("\\", "/")
+                        
+                        if new_dir in virtual_fs:
+                            current_dir = new_dir
+                        else:
+                            channel.send(f"cd: {target}: No such file or directory\r\n".encode())
                                 
                     elif cmd == "cd":
                         current_dir = "/root"
