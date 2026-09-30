@@ -77,8 +77,42 @@ def handle_fake_shell(channel):
                         channel.send(f"{current_dir}\r\n".encode())
                         
                     elif cmd.startswith("ls"):
+                        parts = cmd.split()
+                        flags = ""
+                        for p in parts[1:]:
+                            if p.startswith("-"):
+                                flags += p[1:]
+                        
+                        long_format = 'l' in flags
+                        show_all = 'a' in flags
+                        
                         files = virtual_fs.get(current_dir, [])
-                        channel.send("  ".join(files).encode() + b"\r\n")
+                        
+                        # Gestion des fichiers cachés avec -a ou -la
+                        if not show_all:
+                            filtered_files = [f for f in files if not f.startswith('.')]
+                        else:
+                            filtered_files = ['.', '..'] + [f for f in files if f != '.' and f != '..']
+                        
+                        if long_format:
+                            channel.send(b"total 28\r\n")
+                            for f in filtered_files:
+                                full_path = os.path.normpath(os.path.join(current_dir, f)).replace("\\", "/")
+                                is_dir = full_path in virtual_fs or f in ('.', '..')
+                                
+                                if is_dir:
+                                    perms = "drwx------" if f in (".ssh", ".") else "drwxr-xr-x"
+                                    links = "2"
+                                    size = "4096"
+                                else:
+                                    perms = "-rw-r--r--"
+                                    links = "1"
+                                    size = "2048" if f == "backups.zip" else "220"
+                                    
+                                line = f"{perms} {links} root root {size:>4} Sep 30 12:00 {f}\r\n"
+                                channel.send(line.encode("utf-8"))
+                        else:
+                            channel.send("  ".join(filtered_files).encode("utf-8") + b"\r\n")
                         
                     elif cmd.startswith("mkdir "):
                         target = cmd.split(" ", 1)[1].strip()
@@ -107,13 +141,11 @@ def handle_fake_shell(channel):
                         files_in_dir = virtual_fs.get(current_dir, [])
                         target_path = os.path.normpath(os.path.join(current_dir, target)).replace("\\", "/")
                         
-                        # Si c'est un fichier présent dans le dossier courant
                         if target in files_in_dir and target_path not in virtual_fs:
-                            # Contenus simulés pour rendre le honeypot crédible
                             mock_contents = {
                                 "root.txt": "FLAG{winnie_the_pooh_honey_jar_2026}\r\n",
                                 "config.json": '{\n    "db_host": "127.0.0.1",\n    "db_user": "admin",\n    "secret_token": "a8f5c3e921b"\n}\r\n',
-                                "auth.log": "Sep 29 14:22:10 ubuntu sshd[8412]: Accepted password for root from 10.0.2.15 port 45123 ssh2\r\n",
+                                "auth.log": "Sep 30 12:00:10 ubuntu sshd[8412]: Accepted password for root from 10.0.2.15 port 45123 ssh2\r\n",
                                 "id_rsa": "-----BEGIN OPENSSH PRIVATE KEY-----\r\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlw==\r\n-----END OPENSSH PRIVATE KEY-----\r\n"
                             }
                             content = mock_contents.get(target, f"# Content of {target}\r\n")
