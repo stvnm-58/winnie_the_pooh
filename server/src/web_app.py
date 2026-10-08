@@ -1,5 +1,7 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
+import os
+import psutil
 from database import get_all_attacks, get_all_commands, get_stats
 
 app = Flask(__name__)
@@ -23,6 +25,21 @@ def api_stats():
     stats = get_stats()
     return jsonify(stats)
 
+@app.route('/api/status', methods=['GET'])
+def api_status():
+    """Route pour vérifier si le honeypot est actif via la présence du processus."""
+    active = False
+    for proc in psutil.process_iter(['name', 'cmdline']):
+        try:
+            cmdline = proc.info.get('cmdline')
+            if cmdline and any('honeypot.py' in part for part in cmdline):
+                active = True
+                break
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+            
+    return jsonify({"active": active})
+
 if __name__ == '__main__':
     print("[*] Démarrage de l'API Flask...")
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)

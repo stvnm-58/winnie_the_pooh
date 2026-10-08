@@ -13,6 +13,14 @@ def handle_fake_shell(channel, client_ip):  # <-- Réception de l'IP du client
             "/tmp": ["exploit", "privesc.sh"]
         }
         
+        # Dictionnaire pour stocker le contenu réel des fichiers (statiques et dynamiques)
+        file_contents = {
+            "root.txt": "FLAG{winnie_the_pooh_honey_jar_2026}\r\n",
+            "config.json": '{\n    "db_host": "127.0.0.1",\n    "db_user": "admin",\n    "secret_token": "a8f5c3e921b"\n}\r\n',
+            "auth.log": "Sep 30 12:00:10 ubuntu sshd[8412]: Accepted password for root from 10.0.2.15 port 45123 ssh2\r\nSep 30 12:05:22 ubuntu sshd[8520]: Failed password for invalid user admin from 192.168.1.50 port 51200 ssh2\r\n",
+            "id_rsa": "-----BEGIN OPENSSH PRIVATE KEY-----\r\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlw==\r\n-----END OPENSSH PRIVATE KEY-----\r\n"
+        }
+        
         current_dir = "/root"
 
         channel.send(b"Welcome to Ubuntu 22.04.3 LTS (GNU/Linux 5.15.0-88-generic x86_64)\r\n\r\n")
@@ -153,29 +161,65 @@ def handle_fake_shell(channel, client_ip):  # <-- Réception de l'IP du client
                         else:
                             channel.send(f"mkdir: cannot create directory '{target}': File exists\r\n".encode())
 
-                    # Simule la création d'un fichier vide
+                    # Simule la création d'un fichier vide (touch)
                     elif cmd.startswith("touch "):
                         target = cmd.split(" ", 1)[1].strip()
                         current_files = virtual_fs.setdefault(current_dir, [])
-                        # Ajoute le fichier s'il n'existe pas déjà
                         if target not in current_files:
                             current_files.append(target)
+                        # Un fichier créé avec touch est vide par défaut
+                        file_contents[target] = ""
 
-                    # Simule la lecture de fichier avec cat
+                    # Gestion de la commande echo et écriture dans des fichiers (> ou >>)
+                    elif cmd.startswith("echo "):
+                        if ">>" in cmd:
+                            parts = cmd.split(">>")
+                            content_part = parts[0].replace("echo", "").strip().strip('"').strip("'")
+                            target_file = parts[1].strip()
+                            
+                            current_files = virtual_fs.setdefault(current_dir, [])
+                            if target_file not in current_files:
+                                current_files.append(target_file)
+                            
+                            # Ajoute le contenu à la suite (append)
+                            existing_content = file_contents.get(target_file, "")
+                            file_contents[target_file] = existing_content + content_part + "\r\n"
+                            
+                        elif ">" in cmd:
+                            parts = cmd.split(">")
+                            content_part = parts[0].replace("echo", "").strip().strip('"').strip("'")
+                            target_file = parts[1].strip()
+                            
+                            current_files = virtual_fs.setdefault(current_dir, [])
+                            if target_file not in current_files:
+                                current_files.append(target_file)
+                            
+                            # Écrase ou définit le contenu du fichier
+                            file_contents[target_file] = content_part + "\r\n"
+                        else:
+                            text_to_echo = cmd[5:].strip().strip('"').strip("'")
+                            channel.send(f"{text_to_echo}\r\n".encode("utf-8"))
+
+                    # Simule la lecture de fichier avec cat (et prise en compte optionnelle d'un pipe grep)
                     elif cmd.startswith("cat "):
-                        target = cmd.split(" ", 1)[1].strip()
+                        parts = cmd.split("|")
+                        cat_part = parts[0].strip()
+                        grep_pattern = parts[1].strip().replace("grep ", "").strip('"').strip("'") if len(parts) > 1 else None
+
+                        target = cat_part.split(" ", 1)[1].strip()
                         files_in_dir = virtual_fs.get(current_dir, [])
                         target_path = os.path.normpath(os.path.join(current_dir, target)).replace("\\", "/")
                         
                         # Vérifie si la cible est un fichier valide existant
                         if target in files_in_dir and target_path not in virtual_fs:
-                            mock_contents = {
-                                "root.txt": "FLAG{winnie_the_pooh_honey_jar_2026}\r\n",
-                                "config.json": '{\n    "db_host": "127.0.0.1",\n    "db_user": "admin",\n    "secret_token": "a8f5c3e921b"\n}\r\n',
-                                "auth.log": "Sep 30 12:00:10 ubuntu sshd[8412]: Accepted password for root from 10.0.2.15 port 45123 ssh2\r\n",
-                                "id_rsa": "-----BEGIN OPENSSH PRIVATE KEY-----\r\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlw==\r\n-----END OPENSSH PRIVATE KEY-----\r\n"
-                            }
-                            content = mock_contents.get(target, f"# Content of {target}\r\n")
+                            content = file_contents.get(target, "")
+                            
+                            # Si un grep est présent dans la commande
+                            if grep_pattern:
+                                lines = content.splitlines()
+                                filtered_lines = [l for l in lines if grep_pattern.lower() in l.lower()]
+                                content = "\r\n".join(filtered_lines) + ("\r\n" if filtered_lines else "")
+
                             channel.send(content.encode("utf-8"))
                         # Gère le cas où la cible est un dossier
                         elif target_path in virtual_fs:

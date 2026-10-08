@@ -1,0 +1,143 @@
+body {
+  background-color: #121212;
+  color: #e0e0e0;
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 25px;
+  box-sizing: border-box;
+}
+
+h1 {
+  margin-bottom: 25px;
+  font-size: 22px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.card {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.card h3 {
+  margin-top: 0;
+  font-size: 15px;
+  color: #aaa;
+}
+
+.big-number {
+  font-size: 32px;
+  font-weight: bold;
+  color: #4caf50;
+  margin: 10px 0 0 0;
+}
+
+.list {
+  margin: 10px 0 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+th, td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #2c2c2c;
+}
+
+th {
+  color: #888;
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.clickable-row:hover {
+  background-color: rgba(100, 181, 246, 0.08);
+}
+
+.clickable-row:hover td {
+  color: #90caf9;
+}
+
+.row-selected {
+  background-color: rgba(100, 181, 246, 0.15) !important;
+  border-left: 3px solid #64b5f6;
+}
+
+.ip-link {
+  color: #64b5f6;
+  font-weight: bold;
+}
+
+.card-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-reset {
+  background: #333;
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.btn-reset:hover {
+  background: #444;
+}
+
+.console {
+  background: #0a0a0a;
+  border: 1px solid #222;
+  border-radius: 4px;
+  padding: 15px;
+  font-family: monospace;
+  max-height: 250px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.console-line {
+  margin-bottom: 6px;
+  display: flex;
+  gap: 10px;
+}
+
+.muted {
+  color: #666;
+}
+
+.ip-highlight {
+  color: #64b5f6;
+}
+
+.cmd {
+  color: #fff;
+}
