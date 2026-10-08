@@ -1,11 +1,10 @@
-# src/honeypot.py
 import socket
 import threading
 import time
 import paramiko
-from database import init_db, log_attack
+from database import init_db, log_attack, archive_old_data
 from fake_shell import handle_fake_shell
-from utils import get_country_from_ip  # <-- Import propre depuis utils
+from utils import get_country_from_ip
 
 HOST_KEY = paramiko.RSAKey.generate(2048)
 
@@ -33,7 +32,8 @@ class HoneypotServer(paramiko.ServerInterface):
 
     def check_channel_shell_request(self, channel):
         self.event.set()
-        threading.Thread(target=handle_fake_shell, args=(channel,)).start()
+        # On transmet l'IP du client ici au faux shell
+        threading.Thread(target=handle_fake_shell, args=(channel, self.client_ip)).start()
         return True
 
     def check_channel_pty_request(self, *args, **kwargs):
@@ -68,6 +68,10 @@ def handle_connection(client, addr):
 
 def main():
     init_db()
+    
+    # Exécute l'archivage automatique des données de plus de 30 jours au démarrage du honeypot
+    archive_old_data(days=30)
+    
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind(("0.0.0.0", 2222))
