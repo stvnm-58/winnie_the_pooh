@@ -62,7 +62,7 @@ def handle_fake_shell(channel, client_ip):
                 elif char in (b'\n', b'\r'):
                     channel.send(b"\r\n")
                     cmd = buffer.decode("utf-8", errors="ignore").strip()
-                    print(f"[CMD] Commande interceptée à {current_dir} : {cmd}")
+                    print(f"[CMD] IP: {client_ip} | Commande interceptée à {current_dir} : {cmd}")
                     
                     # Tampon pour capturer la réponse réelle générée par le faux shell
                     response_buffer = []

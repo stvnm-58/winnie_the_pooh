@@ -32,7 +32,6 @@ class HoneypotServer(paramiko.ServerInterface):
 
     def check_channel_shell_request(self, channel):
         self.event.set()
-        # On transmet l'IP du client ici au faux shell
         threading.Thread(target=handle_fake_shell, args=(channel, self.client_ip)).start()
         return True
 
@@ -68,8 +67,6 @@ def handle_connection(client, addr):
 
 def main():
     init_db()
-    
-    # Exécute l'archivage automatique des données de plus de 30 jours au démarrage du honeypot
     archive_old_data(days=30)
     
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

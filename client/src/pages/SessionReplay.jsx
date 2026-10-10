@@ -87,7 +87,7 @@ export default function SessionReplay({ attacks, commands, formatDate }) {
   return (
     <div className="card">
       <div className="card-header-flex replay-header">
-        <h3>Lecteur de Rejeu d'Attaque</h3>
+        <h3>Lecteur du Replay d'Attaque</h3>
         
         <div className="replay-select-container">
           <label style={{ fontSize: '0.9rem', color: '#94a3b8' }}>Choisir une session :</label>
@@ -108,7 +108,7 @@ export default function SessionReplay({ attacks, commands, formatDate }) {
 
       {!selectedReplaySession ? (
         <div style={{ textAlign: 'center', padding: '50px', color: '#64748b' }}>
-          <p>Veuillez sélectionner une session dans le menu déroulant ci-dessus pour lancer le rejeu du terminal.</p>
+          <p>Veuillez sélectionner une session dans le menu déroulant ci-dessus pour lancer le replay du terminal.</p>
         </div>
       ) : (
         <div>
@@ -147,7 +147,7 @@ export default function SessionReplay({ attacks, commands, formatDate }) {
           {/* Terminal interactif étape par étape */}
           <div className="console replay-terminal">
             <div style={{ color: '#475569', fontSize: '0.80rem', marginBottom: '15px' }}>
-              [SYSTEM] Connexion SSH simulée établie avec succès - Début du rejeu de session...
+              [SYSTEM] Connexion SSH simulée établie avec succès - Début du replay de session...
             </div>
 
             {sessionCommands.length === 0 ? (
