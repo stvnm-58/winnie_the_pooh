@@ -40,6 +40,9 @@ export default function Dashboard({
     });
   });
 
+  // Tri des commandes de la plus ancienne (haut) à la plus récente (bas)
+  const sortedFilteredCommands = [...filteredCommands].sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp));
+
   return (
     <div>
       <div className="grid-2">
@@ -126,10 +129,10 @@ export default function Dashboard({
         <div className="console">
           {selectedSessions.length === 0 ? (
             <p className="muted">Sélectionne une ou plusieurs sessions ci-dessus pour afficher leurs saisies.</p>
-          ) : filteredCommands.length === 0 ? (
+          ) : sortedFilteredCommands.length === 0 ? (
             <p className="muted">Aucune commande enregistrée pour cette/ces session(s).</p>
           ) : (
-            filteredCommands.map((cmd, index) => (
+            sortedFilteredCommands.map((cmd, index) => (
               <div key={index} className="console-line">
                 <span className="muted">[{formatDate(cmd.timestamp)}]</span>
                 <span className="ip-highlight">{cmd.ip_address}</span>
