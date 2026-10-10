@@ -28,7 +28,8 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             ip_address TEXT,
             command TEXT,
-            current_dir TEXT
+            current_dir TEXT,
+            response TEXT
         )
     ''')
     
@@ -60,7 +61,8 @@ def init_db():
             timestamp DATETIME,
             ip_address TEXT,
             command TEXT,
-            current_dir TEXT
+            current_dir TEXT,
+            response TEXT
         )
     ''')
     
@@ -95,15 +97,14 @@ def archive_old_data(days=30):
         
         if old_commands:
             conn_arch.executemany('''
-                INSERT OR IGNORE INTO commands (id, timestamp, ip_address, command, current_dir)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO commands (id, timestamp, ip_address, command, current_dir, response)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', old_commands)
             cursor.execute("DELETE FROM commands WHERE timestamp < datetime('now', '-' || ? || ' days')", (days,))
 
         conn_arch.commit()
         conn.commit()
         
-        # Optimisation pour libérer l'espace disque sur la base active
         conn.execute("VACUUM")
         
         if old_attacks or old_commands:
@@ -125,21 +126,20 @@ def log_attack(ip_address, username, password, country):
     conn.commit()
     conn.close()
 
-def log_command(ip_address, command, current_dir):
-    """Enregistre une commande exécutée dans le faux shell."""
+def log_command(ip_address, command, current_dir, response):
+    """Enregistre une commande exécutée et sa réponse dans le faux shell."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO commands (ip_address, command, current_dir)
-        VALUES (?, ?, ?)
-    ''', (ip_address, command, current_dir))
+        INSERT INTO commands (ip_address, command, current_dir, response)
+        VALUES (?, ?, ?, ?)
+    ''', (ip_address, command, current_dir, response))
     conn.commit()
     conn.close()
 
 def get_all_attacks():
-    """Récupère l'historique des attaques."""
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # Permet d'accéder aux colonnes par leur nom
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM attacks ORDER BY timestamp DESC')
     attacks = [dict(row) for row in cursor.fetchall()]
@@ -147,7 +147,6 @@ def get_all_attacks():
     return attacks
 
 def get_all_commands():
-    """Récupère toutes les commandes enregistrées dans le faux shell."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -157,23 +156,18 @@ def get_all_commands():
     return commands
 
 def get_stats():
-    """Calcule des statistiques globales pour le dashboard."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Nombre total d'attaques
     cursor.execute('SELECT COUNT(*) FROM attacks')
     total_attacks = cursor.fetchone()[0]
     
-    # Nombre d'IPs uniques
     cursor.execute('SELECT COUNT(DISTINCT ip_address) FROM attacks')
     unique_ips = cursor.fetchone()[0]
     
-    # Nombre total de commandes capturées
     cursor.execute('SELECT COUNT(*) FROM commands')
     total_commands = cursor.fetchone()[0]
     
-    # Top 5 des pays d'origine
     cursor.execute('SELECT country, COUNT(*) as count FROM attacks WHERE country IS NOT NULL GROUP BY country ORDER BY count DESC LIMIT 5')
     top_countries = [{"country": row[0], "count": row[1]} for row in cursor.fetchall()]
     
