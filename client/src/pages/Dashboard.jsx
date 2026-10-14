@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './Dashboard.css';
 
 export default function Dashboard({ 
@@ -11,10 +11,26 @@ export default function Dashboard({
   isAllSelected, 
   formatDate 
 }) {
-  // État pour la gestion du tri
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
+  const [bannedIps, setBannedIps] = useState([]);
 
-  // Helper robuste pour parser les dates de SQLite (YYYY-MM-DD HH:MM:SS)
+  useEffect(() => {
+    const fetchBannedIps = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/banned-ips');
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Impossible de récupérer les IP bannies.');
+        }
+        setBannedIps(data.ips);
+      } catch (err) {
+        console.error("Erreur lors de la récupération des IP bannies :", err);
+      }
+    };
+
+    fetchBannedIps();
+  }, []);
+
   const parseDate = (dateString) => {
     if (!dateString) return new Date(0);
     let str = dateString;
@@ -24,7 +40,6 @@ export default function Dashboard({
     return new Date(str);
   };
 
-  // Fonction de gestion du clic sur les en-têtes pour le tri
   const handleSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -33,7 +48,54 @@ export default function Dashboard({
     setSortConfig({ key, direction });
   };
 
-  // Tri des attaques selon la configuration actuelle
+  const handleBanIp = async (ip, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Es-tu sûr de vouloir bannir l'IP ${ip} du pare-feu ?`)) return;
+
+    try {
+      const res = await fetch('http://localhost:5000/api/ban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: ip })
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        setBannedIps(prev => prev.includes(ip) ? prev : [...prev, ip]);
+        alert(`Succès : ${data.message}`);
+      } else {
+        alert(`Erreur : ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      alert("Impossible de joindre l'API Flask.");
+    }
+  };
+
+  const handleUnbanIp = async (ip, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Voulez-vous débannir l'IP ${ip} ?`)) return;
+
+    try {
+      const res = await fetch('http://localhost:5000/api/unban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: ip })
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        setBannedIps(prev => prev.filter(item => item !== ip));
+        alert(`Succès : ${data.message}`);
+      } else {
+        alert(`Erreur : ${data.error}`);
+      }
+    } catch (err) {
+      console.error("Erreur réseau :", err);
+      alert("Impossible de joindre l'API Flask.");
+    }
+  };
+
   const sortedAttacks = [...attacks].sort((a, b) => {
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
@@ -54,7 +116,6 @@ export default function Dashboard({
   const filteredCommands = commands.filter(cmd => {
     const cmdDate = parseDate(cmd.timestamp);
     return selectedSessions.some(sessionTimestamp => {
-      // On utilise sortedAttacks ou attacks de base pour retrouver la session
       const currentAttack = attacks.find(a => a.timestamp === sessionTimestamp);
       if (!currentAttack) return false;
       if (cmd.ip_address !== currentAttack.ip_address) return false;
@@ -69,10 +130,8 @@ export default function Dashboard({
     });
   });
 
-  // Tri des commandes de la plus ancienne (haut) à la plus récente (bas)
   const sortedFilteredCommands = [...filteredCommands].sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp));
 
-  // Helper pour afficher la flèche de tri
   const getSortIndicator = (key) => {
     if (sortConfig.key !== key) return ' ↕';
     return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
@@ -102,7 +161,7 @@ export default function Dashboard({
 
       <div className="card">
         <div className="card-header-flex">
-          <h3>Flux Direct</h3>
+          <h3>Flux Direct & Défense Active</h3>
           {attacks.length > 0 && (
             <button className="btn-reset" onClick={handleToggleSelectAll}>
               {isAllSelected ? 'Tout masquer ✕' : 'Tout afficher ✓'}
@@ -112,30 +171,19 @@ export default function Dashboard({
         <table>
           <thead>
             <tr>
-              <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>
-                Date{getSortIndicator('timestamp')}
-              </th>
-              <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>
-                Heure{getSortIndicator('timestamp')}
-              </th>
-              <th onClick={() => handleSort('ip_address')} style={{ cursor: 'pointer' }}>
-                IP Attaquante{getSortIndicator('ip_address')}
-              </th>
-              <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>
-                Utilisateur{getSortIndicator('username')}
-              </th>
-              <th onClick={() => handleSort('password')} style={{ cursor: 'pointer' }}>
-                Mot de passe{getSortIndicator('password')}
-              </th>
-              <th onClick={() => handleSort('country')} style={{ cursor: 'pointer' }}>
-                Pays{getSortIndicator('country')}
-              </th>
+              <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Date{getSortIndicator('timestamp')}</th>
+              <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Heure{getSortIndicator('timestamp')}</th>
+              <th onClick={() => handleSort('ip_address')} style={{ cursor: 'pointer' }}>IP Attaquante{getSortIndicator('ip_address')}</th>
+              <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>Utilisateur{getSortIndicator('username')}</th>
+              <th onClick={() => handleSort('password')} style={{ cursor: 'pointer' }}>Mot de passe{getSortIndicator('password')}</th>
+              <th onClick={() => handleSort('country')} style={{ cursor: 'pointer' }}>Pays{getSortIndicator('country')}</th>
+              <th style={{ textAlign: 'center' }}>Action Défensive</th>
             </tr>
           </thead>
           <tbody>
             {attacks.length === 0 ? (
               <tr>
-                <td colSpan="6" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
+                <td colSpan="7" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
                   Aucune attaque enregistrée pour le moment...
                 </td>
               </tr>
@@ -143,8 +191,7 @@ export default function Dashboard({
               sortedAttacks.map((att, index) => {
                 const sessionKey = att.timestamp;
                 const isSelected = selectedSessions.includes(sessionKey);
-                
-                // Séparation de la date et de l'heure depuis le timestamp (ex: "2026-10-14 12:34:56")
+                const isBanned = bannedIps.includes(att.ip_address);
                 const [datePart, timePart] = att.timestamp ? att.timestamp.split(' ') : ['', ''];
 
                 return (
@@ -162,6 +209,43 @@ export default function Dashboard({
                     <td>{att.username}</td>
                     <td>{att.password}</td>
                     <td>{att.country || 'N/A'}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {isBanned ? (
+                        <button
+                          onClick={(e) => handleUnbanIp(att.ip_address, e)}
+                          style={{
+                            backgroundColor: '#10b981', // Vert pour débannir
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold'
+                          }}
+                          title="Débannir cette IP du pare-feu"
+                        >
+                          Débannir 🔓
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => handleBanIp(att.ip_address, e)}
+                          style={{
+                            backgroundColor: '#ef4444', // Rouge pour bannir
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold'
+                          }}
+                          title="Bannir immédiatement cette IP via le pare-feu du serveur"
+                        >
+                          Bannir l'IP 🛡️
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })

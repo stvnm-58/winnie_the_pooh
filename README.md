@@ -88,6 +88,28 @@ Usage
 
   ```
 
+Firewall Controls
+----------------
+The dashboard's ban/unban actions update the host firewall: Windows uses Windows
+Defender Firewall and Linux uses `iptables`/`ip6tables`. Run the API with
+administrator/root privileges. On Linux, if the API runs as an unprivileged user,
+configure non-interactive `sudo` access for the required firewall commands; the
+API deliberately does not prompt for a password.
+
+For local Linux/WSL development, start the API as root instead of granting broad
+passwordless sudo access to firewall commands. From the `server` directory, with
+the project's virtual environment activated, run:
+
+```bash
+sudo -E "$(command -v python)" -m flask --app src.web_app run \
+  --host=127.0.0.1 --port=5000 --no-debugger --no-reload
+```
+
+This binds the API to localhost and disables Flask's debugger and reloader. Keep
+the privileged API local; do not expose it to an untrusted network. Loopback
+addresses such as `127.0.0.1` and `::1` are intentionally rejected as ban targets
+to avoid blocking local dashboard traffic.
+
 Best Practices
 --------------
 - Do not commit `venv/` or `data/` (these should be in `.gitignore`)

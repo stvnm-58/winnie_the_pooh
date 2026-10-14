@@ -21,6 +21,11 @@
   * *I want* visualiser un tableau de bord web listant les dernières attaques avec leur horodatage, l'adresse IP source, le nom d'utilisateur et le mot de passe essayé,
   * *So that* je puisse analyser rapidement les flux malveillants en temps réel.
 
+* **[Should Have] Changement du port d'écoute**
+  * *As a* administrateur de sécurité,
+  * *I want* changer le port du honeypot depuis le dashboard,
+  * *So that* je puisse déplacer son port d'écoute sans redémarrer manuellement les services.
+
 * **[Should Have] Statistiques globales**
   * *As a* administrateur de sécurité,
   * *I want* voir des compteurs synthétiques (nombre total d'attaques et nombre d'IPs uniques) en haut du dashboard,
@@ -66,7 +71,7 @@
 ```text
 [ Attaquant / Bot ]
           │
-          │ 1. Tentative de connexion SSH (Port 2222)
+          │ 1. Tentative de connexion SSH (port configurable, 2222 par défaut)
           ▼
   +───────────────────────────────────────────────────────────+
   |                   Honeypot Core (Python)                  |
@@ -104,7 +109,7 @@
 
 ### 3.1 Description des Composants
 
-    HoneypotServer (Python / Paramiko) : Écoute sur le port 2222, gère les bannières SSH, intercepte les tentatives d'authentification par mot de passe et déclenche l'écriture en base.
+    HoneypotServer (Python / Paramiko) : Écoute sur le port configuré (2222 par défaut), gère les bannières SSH, intercepte les tentatives d'authentification par mot de passe et déclenche l'écriture en base. Le port peut être changé depuis le dashboard, ce qui redémarre le honeypot.
 
     DatabaseManager (database.py) : Encapsule les requêtes SQL vers SQLite (init_db, log_attack, get_all_attacks).
 
