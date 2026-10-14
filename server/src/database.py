@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '../data/honeypot.db')
 ARCHIVE_PATH = os.path.join(os.path.dirname(__file__), '../data/archive.db')
@@ -14,7 +15,7 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS attacks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            timestamp DATETIME,
             ip_address TEXT,
             username TEXT,
             password TEXT,
@@ -25,7 +26,7 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS commands (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            timestamp DATETIME,
             ip_address TEXT,
             command TEXT,
             current_dir TEXT,
@@ -119,10 +120,11 @@ def archive_old_data(days=30):
 def log_attack(ip_address, username, password, country):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cursor.execute('''
-        INSERT INTO attacks (ip_address, username, password, country)
-        VALUES (?, ?, ?, ?)
-    ''', (ip_address, username, password, country))
+        INSERT INTO attacks (timestamp, ip_address, username, password, country)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (current_time, ip_address, username, password, country))
     conn.commit()
     conn.close()
 
@@ -130,10 +132,11 @@ def log_command(ip_address, command, current_dir, response):
     """Enregistre une commande exécutée et sa réponse dans le faux shell."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cursor.execute('''
-        INSERT INTO commands (ip_address, command, current_dir, response)
-        VALUES (?, ?, ?, ?)
-    ''', (ip_address, command, current_dir, response))
+        INSERT INTO commands (timestamp, ip_address, command, current_dir, response)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (current_time, ip_address, command, current_dir, response))
     conn.commit()
     conn.close()
 
