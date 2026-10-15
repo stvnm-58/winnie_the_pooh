@@ -2,7 +2,7 @@
 import os
 from database import log_command
 
-def handle_fake_shell(channel, client_ip):
+def handle_fake_shell(channel, client_ip, port=2222):
     try:
         virtual_fs = {
             "/root": ["config.json", "backups.zip", "root.txt", ".ssh"],
@@ -77,7 +77,7 @@ def handle_fake_shell(channel, client_ip):
                     if cmd.lower() in ("exit", "quit"):
                         shell_output("logout\r\n")
                         if cmd != "":
-                            log_command(client_ip, cmd, current_dir, "".join(response_buffer))
+                            log_command(client_ip, cmd, current_dir, "".join(response_buffer), port=port)
                         return
                         
                     elif cmd.startswith("uname"):
@@ -227,7 +227,7 @@ def handle_fake_shell(channel, client_ip):
                     
                     # Enregistrement de la commande et de sa vraie réponse en BDD
                     if cmd != "":
-                        log_command(client_ip, cmd, current_dir, "".join(response_buffer))
+                        log_command(client_ip, cmd, current_dir, "".join(response_buffer), port=port)
                     
                     shell_output(f"root@ubuntu:{current_dir}# ")
                     buffer = b""

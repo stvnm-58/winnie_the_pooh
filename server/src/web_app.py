@@ -21,6 +21,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, 'data', 'config.json')
 BAN_STATE_PATH = os.path.join(BASE_DIR, '..', 'data', 'banned_ips.json')
 PORT_CHANGE_LOCK = threading.Lock()
 BAN_LOCK = threading.Lock()
+HONEYPOT_LOCK = threading.Lock()
 
 def get_current_port():
     if os.path.exists(CONFIG_PATH):
@@ -67,6 +68,19 @@ def find_honeypot_processes(honeypot_script):
             continue
     return honeypot_processes
 
+def get_honeypot_process_port(process, honeypot_script):
+    cmdline = process.info.get('cmdline') or []
+    target_script = os.path.normcase(os.path.abspath(honeypot_script))
+    for index, argument in enumerate(cmdline):
+        if (
+            argument.lower().endswith('.py')
+            and os.path.normcase(os.path.abspath(argument)) == target_script
+        ):
+            if index + 1 < len(cmdline) and cmdline[index + 1].isdecimal():
+                return int(cmdline[index + 1])
+            return get_current_port()
+    return None
+
 def stop_honeypot_processes(processes):
     running_processes = []
     for proc in processes:
@@ -85,8 +99,11 @@ def stop_honeypot_processes(processes):
             proc.kill()
             proc.wait(timeout=3)
 
-def start_honeypot(honeypot_script):
-    process = subprocess.Popen([sys.executable, honeypot_script], cwd=BASE_DIR)
+def start_honeypot(honeypot_script, port=None):
+    cmd = [sys.executable, honeypot_script]
+    if port:
+        cmd.append(str(port))
+    process = subprocess.Popen(cmd, cwd=BASE_DIR)
     try:
         process.wait(timeout=1)
     except subprocess.TimeoutExpired:
@@ -94,6 +111,84 @@ def start_honeypot(honeypot_script):
     raise RuntimeError(
         f"Le processus honeypot s'est arrêté au démarrage (code {process.returncode})."
     )
+
+# --- ROUTES DE GESTION DU DECEPTION MESH (MULTI-HONEYPOTS) ---
+
+def find_all_honeypot_instances():
+    """Détecte tous les processus honeypot.py en cours avec leur port exact."""
+    honeypot_script = os.path.join(BASE_DIR, 'honeypot.py')
+    instances = []
+    for proc in find_honeypot_processes(honeypot_script):
+        try:
+            port = get_honeypot_process_port(proc, honeypot_script)
+            if port is not None:
+                instances.append({"pid": proc.pid, "port": port})
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            continue
+    return sorted(instances, key=lambda instance: (instance['port'], instance['pid']))
+
+@app.route('/api/honeypots', methods=['GET'])
+def api_list_honeypots():
+    """Liste tous les faux SSH actifs sur le serveur."""
+    return jsonify({"honeypots": find_all_honeypot_instances()})
+
+@app.route('/api/honeypots', methods=['POST'])
+def api_start_honeypot():
+    """Déploie un nouveau faux SSH sur un port spécifique."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or 'port' not in data:
+        return jsonify({"error": "Port manquant."}), 400
+    value = data['port']
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return jsonify({"error": "Le port doit être un nombre entier."}), 400
+    if isinstance(value, str) and (not value.isdecimal() or len(value) > 5):
+        return jsonify({"error": "Le port doit être un nombre entier."}), 400
+    port = int(value)
+
+    if not 1 <= port <= 65535:
+        return jsonify({"error": "Le port doit être compris entre 1 et 65535."}), 400
+
+    honeypot_script = os.path.join(BASE_DIR, 'honeypot.py')
+    with HONEYPOT_LOCK:
+        if any(instance['port'] == port for instance in find_all_honeypot_instances()):
+            return jsonify({"error": f"Un honeypot écoute déjà sur le port {port}."}), 409
+
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.bind(("0.0.0.0", port))
+        except OSError:
+            return jsonify({"error": f"Le port {port} est déjà utilisé ou indisponible."}), 409
+
+        try:
+            process = start_honeypot(honeypot_script, port=port)
+        except (OSError, RuntimeError) as error:
+            return jsonify({"error": f"Échec du lancement du honeypot : {error}"}), 500
+
+    return jsonify({
+        "success": True,
+        "message": f"Faux SSH déployé avec succès sur le port {port}.",
+        "pid": process.pid,
+        "port": port
+    })
+
+@app.route('/api/honeypots/<int:port>', methods=['DELETE'])
+def api_stop_honeypot(port):
+    """Arrête le faux SSH ciblé sur un port précis."""
+    honeypot_script = os.path.join(BASE_DIR, 'honeypot.py')
+    with HONEYPOT_LOCK:
+        matches = [
+            proc for proc in find_honeypot_processes(honeypot_script)
+            if get_honeypot_process_port(proc, honeypot_script) == port
+        ]
+        if not matches:
+            return jsonify({"error": f"Aucun faux SSH actif trouvé sur le port {port}."}), 404
+
+        try:
+            stop_honeypot_processes(matches)
+        except (psutil.Error, OSError) as error:
+            return jsonify({"error": f"Impossible d'arrêter le honeypot sur le port {port} : {error}"}), 500
+
+    return jsonify({"success": True, "message": f"Faux SSH sur le port {port} arrêté avec succès."})
 
 # --- FONCTIONS DE DÉFENSE ACTIVE (FIREWALL : BAN / UNBAN) ---
 def run_firewall_command(command, check=True):
@@ -288,7 +383,7 @@ def api_set_port():
     value = data.get('port')
     if isinstance(value, bool) or not isinstance(value, (int, str)):
         return jsonify({"error": "Le port doit être un entier entre 1 et 65535."}), 400
-    if isinstance(value, str) and not value.isdecimal():
+    if isinstance(value, str) and (not value.isdecimal() or len(value) > 5):
         return jsonify({"error": "Le port doit être un entier entre 1 et 65535."}), 400
 
     new_port = int(value)
@@ -296,9 +391,12 @@ def api_set_port():
         return jsonify({"error": "Le port doit être compris entre 1 et 65535."}), 400
 
     honeypot_script = os.path.join(BASE_DIR, 'honeypot.py')
-    with PORT_CHANGE_LOCK:
+    with PORT_CHANGE_LOCK, HONEYPOT_LOCK:
         old_port = get_current_port()
-        old_processes = find_honeypot_processes(honeypot_script)
+        old_processes = [
+            proc for proc in find_honeypot_processes(honeypot_script)
+            if get_honeypot_process_port(proc, honeypot_script) == old_port
+        ]
         if new_port == old_port and old_processes:
             return jsonify({"success": True, "port": new_port})
 
@@ -311,12 +409,12 @@ def api_set_port():
         save_configured_port(new_port)
         try:
             stop_honeypot_processes(old_processes)
-            start_honeypot(honeypot_script)
+            start_honeypot(honeypot_script, port=new_port)
         except (OSError, psutil.Error, RuntimeError) as error:
             save_configured_port(old_port)
             if old_processes:
                 try:
-                    start_honeypot(honeypot_script)
+                    start_honeypot(honeypot_script, port=old_port)
                 except (OSError, RuntimeError) as restart_error:
                     return jsonify({
                         "error": f"Échec du changement de port : {error}. "

@@ -5,31 +5,95 @@ export default function Dashboard({
   attacks, 
   commands, 
   stats, 
+  activeHoneypots,
   selectedSessions, 
   handleRowClick, 
   handleToggleSelectAll, 
-  isAllSelected, 
   formatDate 
 }) {
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
   const [bannedIps, setBannedIps] = useState([]);
+  const [banLoadingIp, setBanLoadingIp] = useState(null);
+  
+  // Persistance du dernier honeypot sélectionné dans le localStorage
+  const [selectedPortFilter, setSelectedPortFilter] = useState(() => {
+    return localStorage.getItem('winnie_last_honeypot') || 'ALL';
+  });
 
   useEffect(() => {
-    const fetchBannedIps = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/banned-ips');
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Impossible de récupérer les IP bannies.');
-        }
-        setBannedIps(data.ips);
-      } catch (err) {
-        console.error("Erreur lors de la récupération des IP bannies :", err);
-      }
-    };
+    localStorage.setItem('winnie_last_honeypot', selectedPortFilter);
+  }, [selectedPortFilter]);
 
+  // Récupération de la liste des IP bannies pour les boutons du tableau
+  const fetchBannedIps = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/banned-ips');
+      if (res.ok) {
+        const data = await res.json();
+        setBannedIps(data.ips || []);
+      }
+    } catch (err) {
+      console.error("Erreur lors de la récupération des IP bannies :", err);
+    }
+  };
+
+  useEffect(() => {
     fetchBannedIps();
+    const interval = setInterval(fetchBannedIps, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+  const handleToggleBan = async (ipAddress) => {
+    if (!ipAddress || ipAddress === 'Inconnue' || ipAddress === 'N/A') return;
+    
+    const isBanned = bannedIps.includes(ipAddress);
+    const endpoint = isBanned ? 'http://localhost:5000/api/unban' : 'http://localhost:5000/api/ban';
+    
+    setBanLoadingIp(ipAddress);
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: ipAddress })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchBannedIps();
+      } else {
+        alert(data.error || "Erreur lors de l'action sur le pare-feu.");
+      }
+    } catch (err) {
+      alert("Erreur de connexion réseau avec l'API Flask.");
+    } finally {
+      setBanLoadingIp(null);
+    }
+  };
+
+  // Liste globale des ports (armada active + historique)
+  const availablePorts = [...new Set([
+    ...(activeHoneypots || []).map(h => h.port),
+    ...attacks.map(a => a.port || 2222)
+  ])].sort((a, b) => a - b);
+
+  // Filtrage des attaques par port
+  const filteredByPortAttacks = attacks.filter(att => {
+    if (selectedPortFilter === 'ALL') return true;
+    return (att.port || 2222) === Number(selectedPortFilter);
+  });
+
+  const filteredTopCountries = Object.entries(
+    filteredByPortAttacks.reduce((counts, attack) => {
+      if (attack.country) counts[attack.country] = (counts[attack.country] || 0) + 1;
+      return counts;
+    }, {})
+  )
+    .map(([country, count]) => ({ country, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  const visibleAttackIds = filteredByPortAttacks.map(attack => attack.id);
+  const areVisibleAttacksSelected = visibleAttackIds.length > 0
+    && visibleAttackIds.every(id => selectedSessions.includes(id));
 
   const parseDate = (dateString) => {
     if (!dateString) return new Date(0);
@@ -48,55 +112,7 @@ export default function Dashboard({
     setSortConfig({ key, direction });
   };
 
-  const handleBanIp = async (ip, e) => {
-    e.stopPropagation();
-    if (!window.confirm(`Es-tu sûr de vouloir bannir l'IP ${ip} du pare-feu ?`)) return;
-
-    try {
-      const res = await fetch('http://localhost:5000/api/ban', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip: ip })
-      });
-      const data = await res.json();
-      
-      if (res.ok) {
-        setBannedIps(prev => prev.includes(ip) ? prev : [...prev, ip]);
-        alert(`Succès : ${data.message}`);
-      } else {
-        alert(`Erreur : ${data.error}`);
-      }
-    } catch (err) {
-      console.error("Erreur réseau :", err);
-      alert("Impossible de joindre l'API Flask.");
-    }
-  };
-
-  const handleUnbanIp = async (ip, e) => {
-    e.stopPropagation();
-    if (!window.confirm(`Voulez-vous débannir l'IP ${ip} ?`)) return;
-
-    try {
-      const res = await fetch('http://localhost:5000/api/unban', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip: ip })
-      });
-      const data = await res.json();
-      
-      if (res.ok) {
-        setBannedIps(prev => prev.filter(item => item !== ip));
-        alert(`Succès : ${data.message}`);
-      } else {
-        alert(`Erreur : ${data.error}`);
-      }
-    } catch (err) {
-      console.error("Erreur réseau :", err);
-      alert("Impossible de joindre l'API Flask.");
-    }
-  };
-
-  const sortedAttacks = [...attacks].sort((a, b) => {
+  const sortedAttacks = [...filteredByPortAttacks].sort((a, b) => {
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
 
@@ -115,14 +131,17 @@ export default function Dashboard({
 
   const filteredCommands = commands.filter(cmd => {
     const cmdDate = parseDate(cmd.timestamp);
-    return selectedSessions.some(sessionTimestamp => {
-      const currentAttack = attacks.find(a => a.timestamp === sessionTimestamp);
+    return selectedSessions.some(sessionId => {
+      const currentAttack = filteredByPortAttacks.find(a => a.id === sessionId);
       if (!currentAttack) return false;
       if (cmd.ip_address !== currentAttack.ip_address) return false;
+      if ((cmd.port || 2222) !== (currentAttack.port || 2222)) return false;
 
       const startDate = parseDate(currentAttack.timestamp);
       const nextAttack = sortedAttacks.find(
-        a => a.ip_address === currentAttack.ip_address && parseDate(a.timestamp) > startDate
+        a => a.ip_address === currentAttack.ip_address
+          && (a.port || 2222) === (currentAttack.port || 2222)
+          && parseDate(a.timestamp) > startDate
       );
       const endDate = nextAttack ? parseDate(nextAttack.timestamp) : new Date();
 
@@ -138,147 +157,222 @@ export default function Dashboard({
   };
 
   return (
-    <div>
-      <div className="grid-2">
-        <div className="card">
-          <h3>Attaques Totales</h3>
-          <p className="big-number">{stats?.total_attacks || attacks.length}</p>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px' }}>
+      
+      {/* COLONNE GAUCHE : STATISTIQUES, TABLEAU & CONSOLE */}
+      <div>
+        <div className="grid-2">
+          <div className="card">
+            <h3>{selectedPortFilter === 'ALL' ? 'Attaques Totales' : `Attaques (Port ${selectedPortFilter})`}</h3>
+            <p className="big-number">
+              {selectedPortFilter === 'ALL'
+                ? (stats?.total_attacks ?? attacks.length)
+                : filteredByPortAttacks.length}
+            </p>
+          </div>
+
+          <div className="card">
+            <h3>Pays d'origine</h3>
+            <ul className="list">
+              {(selectedPortFilter === 'ALL' ? stats?.top_countries : filteredTopCountries)?.length > 0 ? (
+                (selectedPortFilter === 'ALL' ? stats.top_countries : filteredTopCountries).map((c, i) => (
+                  <li key={i}>{c.country} ({c.count} attaques)</li>
+                ))
+              ) : (
+                <li>Non spécifié / Local</li>
+              )}
+            </ul>
+          </div>
         </div>
 
         <div className="card">
-          <h3>Pays d'origine</h3>
-          <ul className="list">
-            {stats?.top_countries && stats.top_countries.length > 0 ? (
-              stats.top_countries.map((c, i) => (
-                <li key={i}>{c.country} ({c.count} attaques)</li>
-              ))
-            ) : (
-              <li>Non spécifié / Local</li>
+          <div className="card-header-flex" style={{ flexWrap: 'wrap', gap: '15px' }}>
+            <h3>Flux Direct {selectedPortFilter !== 'ALL' && `- Focus Port ${selectedPortFilter}`}</h3>
+            
+            {filteredByPortAttacks.length > 0 && (
+              <button className="btn-reset" onClick={() => handleToggleSelectAll(visibleAttackIds)}>
+                {areVisibleAttacksSelected ? 'Tout masquer ✕' : 'Tout afficher ✓'}
+              </button>
             )}
-          </ul>
-        </div>
-      </div>
+          </div>
 
-      <div className="card">
-        <div className="card-header-flex">
-          <h3>Flux Direct & Défense Active</h3>
-          {attacks.length > 0 && (
-            <button className="btn-reset" onClick={handleToggleSelectAll}>
-              {isAllSelected ? 'Tout masquer ✕' : 'Tout afficher ✓'}
-            </button>
-          )}
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Date{getSortIndicator('timestamp')}</th>
-              <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Heure{getSortIndicator('timestamp')}</th>
-              <th onClick={() => handleSort('ip_address')} style={{ cursor: 'pointer' }}>IP Attaquante{getSortIndicator('ip_address')}</th>
-              <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>Utilisateur{getSortIndicator('username')}</th>
-              <th onClick={() => handleSort('password')} style={{ cursor: 'pointer' }}>Mot de passe{getSortIndicator('password')}</th>
-              <th onClick={() => handleSort('country')} style={{ cursor: 'pointer' }}>Pays{getSortIndicator('country')}</th>
-              <th style={{ textAlign: 'center' }}>Action Défensive</th>
-            </tr>
-          </thead>
-          <tbody>
-            {attacks.length === 0 ? (
+          <table>
+            <thead>
               <tr>
-                <td colSpan="7" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
-                  Aucune attaque enregistrée pour le moment...
-                </td>
+                <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Date & Heure{getSortIndicator('timestamp')}</th>
+                <th onClick={() => handleSort('port')} style={{ cursor: 'pointer' }}>Port Piégé{getSortIndicator('port')}</th>
+                <th onClick={() => handleSort('ip_address')} style={{ cursor: 'pointer' }}>IP Attaquante{getSortIndicator('ip_address')}</th>
+                <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>Utilisateur{getSortIndicator('username')}</th>
+                <th onClick={() => handleSort('password')} style={{ cursor: 'pointer' }}>Mot de passe{getSortIndicator('password')}</th>
+                <th>Actions Pare-feu</th>
               </tr>
-            ) : (
-              sortedAttacks.map((att, index) => {
-                const sessionKey = att.timestamp;
-                const isSelected = selectedSessions.includes(sessionKey);
-                const isBanned = bannedIps.includes(att.ip_address);
-                const [datePart, timePart] = att.timestamp ? att.timestamp.split(' ') : ['', ''];
+            </thead>
+            <tbody>
+              {sortedAttacks.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
+                    Aucune attaque enregistrée pour ce honeypot...
+                  </td>
+                </tr>
+              ) : (
+                sortedAttacks.map((att) => {
+                  const sessionKey = att.id;
+                  const isSelected = selectedSessions.includes(sessionKey);
+                  const [datePart, timePart] = att.timestamp ? att.timestamp.split(' ') : ['', ''];
+                  const isBanned = bannedIps.includes(att.ip_address);
+                  const isThisLoading = banLoadingIp === att.ip_address;
 
-                return (
-                  <tr 
-                    key={index} 
-                    onClick={() => handleRowClick(sessionKey)}
-                    className={`clickable-row ${isSelected ? 'row-selected' : ''}`}
-                    title="Cliquer pour afficher/masquer cette session"
-                  >
-                    <td>{datePart}</td>
-                    <td>{timePart}</td>
-                    <td>
-                      <span className="ip-link">{att.ip_address || 'Inconnue'}</span>
-                    </td>
-                    <td>{att.username}</td>
-                    <td>{att.password}</td>
-                    <td>{att.country || 'N/A'}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      {isBanned ? (
+                  return (
+                    <tr 
+                      key={att.id}
+                      className={`clickable-row ${isSelected ? 'row-selected' : ''}`}
+                    >
+                      <td onClick={() => handleRowClick(sessionKey)}>{datePart} {timePart}</td>
+                      <td onClick={() => handleRowClick(sessionKey)}><span style={{ backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px', color: '#38bdf8', fontWeight: 'bold' }}>{att.port || 2222}</span></td>
+                      <td onClick={() => handleRowClick(sessionKey)}><span className="ip-link">{att.ip_address || 'Inconnue'}</span></td>
+                      <td onClick={() => handleRowClick(sessionKey)}>{att.username}</td>
+                      <td onClick={() => handleRowClick(sessionKey)}>{att.password}</td>
+                      <td>
                         <button
-                          onClick={(e) => handleUnbanIp(att.ip_address, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleBan(att.ip_address);
+                          }}
+                          disabled={isThisLoading || !att.ip_address || att.ip_address === '127.0.0.1'}
                           style={{
-                            backgroundColor: '#10b981', // Vert pour débannir
-                            color: '#ffffff',
+                            backgroundColor: isBanned ? '#22c55e' : '#ef4444',
+                            color: '#fff',
                             border: 'none',
-                            padding: '6px 12px',
+                            padding: '4px 8px',
                             borderRadius: '4px',
                             cursor: 'pointer',
                             fontSize: '0.75rem',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
+                            opacity: isThisLoading ? 0.6 : 1
                           }}
-                          title="Débannir cette IP du pare-feu"
                         >
-                          Débannir 🔓
+                          {isThisLoading ? '...' : (isBanned ? 'Débannir 🛡️' : 'Bannir 🚫')}
                         </button>
-                      ) : (
-                        <button
-                          onClick={(e) => handleBanIp(att.ip_address, e)}
-                          style={{
-                            backgroundColor: '#ef4444', // Rouge pour bannir
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold'
-                          }}
-                          title="Bannir immédiatement cette IP via le pare-feu du serveur"
-                        >
-                          Bannir l'IP 🛡️
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card">
+          <div className="card-header-flex">
+            <h3>Commandes saisies dans le Honeypot</h3>
+            {selectedSessions.length > 0 && (
+              <button className="btn-reset" onClick={() => handleRowClick(null)}>
+                Tout masquer ({selectedSessions.length}) ✕
+              </button>
             )}
-          </tbody>
-        </table>
+          </div>
+          <div className="console">
+            {selectedSessions.length === 0 ? (
+              <p className="muted">Sélectionne une ou plusieurs sessions ci-dessus pour afficher leurs saisies.</p>
+            ) : sortedFilteredCommands.length === 0 ? (
+              <p className="muted">Aucune commande enregistrée pour cette/ces session(s).</p>
+            ) : (
+              sortedFilteredCommands.map((cmd, index) => (
+                <div key={index} className="console-line">
+                  <span className="muted">[{formatDate(cmd.timestamp)}]</span>
+                  <span className="ip-highlight">{cmd.ip_address}</span>
+                  <span className="cmd">$ {cmd.command}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="card">
-        <div className="card-header-flex">
-          <h3>Commandes saisies dans le Honeypot</h3>
-          {selectedSessions.length > 0 && (
-            <button className="btn-reset" onClick={() => handleRowClick(null)}>
-              Tout masquer ({selectedSessions.length} session{selectedSessions.length > 1 ? 's' : ''}) ✕
+      {/* COLONNE DROITE : PANNEAU LATÉRAL DE SÉLECTION DE HONEYPOT UNIQUEMENT */}
+      <div>
+        <div className="card" style={{ position: 'sticky', top: '20px' }}>
+          <h3 style={{ marginBottom: '15px' }}>🕸️ Deception Mesh</h3>
+          <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '15px' }}>
+            Sélectionnez une instance pour filtrer le tableau de bord :
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              onClick={() => setSelectedPortFilter('ALL')}
+              style={{
+                display: 'flex',
+                justify: 'space-between',
+                alignItems: 'center',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '1px solid #334155',
+                backgroundColor: selectedPortFilter === 'ALL' ? '#3b82f6' : '#0f172a',
+                color: '#fff',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                textAlign: 'left',
+                width: '100%',
+                boxSizing: 'border-box'
+              }}
+            >
+              <span>🌐 Vue Globale</span>
+              <span style={{ fontSize: '0.85rem', opacity: 0.9, marginLeft: '10px' }}>({attacks.length})</span>
             </button>
-          )}
-        </div>
-        <div className="console">
-          {selectedSessions.length === 0 ? (
-            <p className="muted">Sélectionne une ou plusieurs sessions ci-dessus pour afficher leurs saisies.</p>
-          ) : sortedFilteredCommands.length === 0 ? (
-            <p className="muted">Aucune commande enregistrée pour cette/ces session(s).</p>
-          ) : (
-            sortedFilteredCommands.map((cmd, index) => (
-              <div key={index} className="console-line">
-                <span className="muted">[{formatDate(cmd.timestamp)}]</span>
-                <span className="ip-highlight">{cmd.ip_address}</span>
-                <span className="cmd">$ {cmd.command}</span>
-              </div>
-            ))
-          )}
+
+            <hr style={{ border: 'none', borderTop: '1px solid #334155', margin: '5px 0' }} />
+
+            {availablePorts.map((port) => {
+              const isLive = (activeHoneypots || []).some(h => h.port === port);
+              const count = attacks.filter(a => (a.port || 2222) === port).length;
+              const isSelected = selectedPortFilter === String(port);
+
+              return (
+                <button
+                  key={port}
+                  onClick={() => setSelectedPortFilter(String(port))}
+                  style={{
+                    display: 'flex',
+                    justify: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #334155',
+                    backgroundColor: isSelected ? '#3b82f6' : '#0f172a',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    gap: '15px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: isLive ? '#22c55e' : '#64748b',
+                      flexShrink: 0
+                    }}></span>
+                    <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Port {port}</span>
+                  </div>
+
+                  <span style={{ 
+                    fontSize: '0.80rem', 
+                    color: isSelected ? '#ffffff' : '#94a3b8',
+                    whiteSpace: 'nowrap',
+                    marginLeft: 'auto'
+                  }}>
+                    {count} attaque{count > 1 ? 's' : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
+
     </div>
   );
 }

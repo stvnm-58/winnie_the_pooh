@@ -26,6 +26,11 @@
   * *I want* changer le port du honeypot depuis le dashboard,
   * *So that* je puisse déplacer son port d'écoute sans redémarrer manuellement les services.
 
+* **[Should Have] Plusieurs honeypots simultanés**
+  * *As a* administrateur de sécurité,
+  * *I want* déployer plusieurs honeypots sur des ports distincts et les arrêter individuellement,
+  * *So that* je puisse surveiller plusieurs points d'entrée SSH en parallèle.
+
 * **[Should Have] Statistiques globales**
   * *As a* administrateur de sécurité,
   * *I want* voir des compteurs synthétiques (nombre total d'attaques et nombre d'IPs uniques) en haut du dashboard,
@@ -109,7 +114,7 @@
 
 ### 3.1 Description des Composants
 
-    HoneypotServer (Python / Paramiko) : Écoute sur le port configuré (2222 par défaut), gère les bannières SSH, intercepte les tentatives d'authentification par mot de passe et déclenche l'écriture en base. Le port peut être changé depuis le dashboard, ce qui redémarre le honeypot.
+    HoneypotServer (Python / Paramiko) : Chaque processus écoute sur son propre port SSH (2222 par défaut pour l'instance principale). Le dashboard permet de déployer plusieurs instances sur des ports distincts et de les arrêter individuellement. Les tentatives capturées sont enregistrées avec le port qui les a reçues.
 
     DatabaseManager (database.py) : Encapsule les requêtes SQL vers SQLite (init_db, log_attack, get_all_attacks).
 
