@@ -1,3 +1,7 @@
 venv/
 __pycache__/
 node_modules/
+server/data/*.db
+server/data/*.db-shm
+server/data/*.db-wal
+server/data/banned_ips.json

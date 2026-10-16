@@ -1,9 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import './SessionReplay.css';
+
+function parseDate(dateString) {
+  if (!dateString) return new Date(0);
+  let str = dateString;
+  if (!str.endsWith('Z') && !str.includes('+') && !str.includes('T')) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  return new Date(str);
+}
 
 export default function SessionReplay({ attacks, commands, activeHoneypots, formatDate }) {
   const [selectedReplaySession, setSelectedReplaySession] = useState('');
-  const [sessionCommands, setSessionCommands] = useState([]);
   const [currentReplayIndex, setCurrentReplayIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [replaySpeed, setReplaySpeed] = useState(1);
@@ -17,50 +25,31 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
 
   useEffect(() => {
     localStorage.setItem('winnie_replay_last_honeypot', selectedPortFilter);
-    setSelectedReplaySession('');
   }, [selectedPortFilter]);
 
   // Liste globale des ports (armada active + historique d'attaques)
-  const availablePorts = [...new Set([
+  const availablePorts = useMemo(() => [...new Set([
     ...(activeHoneypots || []).map(h => h.port),
     ...attacks.map(a => a.port || 2222)
-  ])].sort((a, b) => a - b);
+  ])].sort((a, b) => a - b), [activeHoneypots, attacks]);
 
   // Filtrage des attaques selon le port sélectionné dans le panneau
-  const filteredAttacks = attacks.filter(att => {
+  const filteredAttacks = useMemo(() => attacks.filter(att => {
     if (selectedPortFilter === 'ALL') return true;
     return (att.port || 2222) === Number(selectedPortFilter);
-  });
+  }), [attacks, selectedPortFilter]);
 
-  // Helper pour parser les dates de SQLite (YYYY-MM-DD HH:MM:SS)
-  const parseDate = (dateString) => {
-    if (!dateString) return new Date(0);
-    let str = dateString;
-    if (!str.endsWith('Z') && !str.includes('+') && !str.includes('T')) {
-      str = str.replace(' ', 'T') + 'Z';
-    }
-    return new Date(str);
-  };
+  const targetAttack = useMemo(() => attacks.find(a =>
+    String(a.id) === String(selectedReplaySession) || a.timestamp === selectedReplaySession
+  ), [attacks, selectedReplaySession]);
 
-  // Chargement des commandes de la session sélectionnée
-  useEffect(() => {
-    if (!selectedReplaySession) {
-      setSessionCommands([]);
-      setCurrentReplayIndex(0);
-      setIsPlaying(false);
-      return;
-    }
+  const sortedAttacks = useMemo(
+    () => [...attacks].sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp)),
+    [attacks]
+  );
 
-    // Recherche robuste de l'attaque sélectionnée par id ou par timestamp
-    const targetAttack = attacks.find(a => 
-      String(a.id) === String(selectedReplaySession) || a.timestamp === selectedReplaySession
-    );
-    if (!targetAttack) {
-      setSessionCommands([]);
-      return;
-    }
-
-    const sortedAttacks = [...attacks].sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp));
+  const sessionCommands = useMemo(() => {
+    if (!selectedReplaySession || !targetAttack) return [];
     const startDate = parseDate(targetAttack.timestamp);
     const targetPort = targetAttack.port || 2222;
 
@@ -83,13 +72,19 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
     });
 
     const sortedFilteredCommands = filtered.sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp));
-    setSessionCommands(sortedFilteredCommands);
-  }, [selectedReplaySession, attacks, commands]);
+    return sortedFilteredCommands;
+  }, [selectedReplaySession, targetAttack, sortedAttacks, commands]);
 
-  useEffect(() => {
+  const handleSessionChange = (sessionId) => {
+    setSelectedReplaySession(sessionId);
     setIsPlaying(false);
     setCurrentReplayIndex(0);
-  }, [selectedReplaySession]);
+  };
+
+  const handlePortFilterChange = (port) => {
+    setSelectedPortFilter(port);
+    handleSessionChange('');
+  };
 
   // Logique de lecture automatique
   useEffect(() => {
@@ -119,9 +114,13 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentReplayIndex]);
 
-  const activeTargetAttack = attacks.find(a => 
-    String(a.id) === String(selectedReplaySession) || a.timestamp === selectedReplaySession
-  );
+  const activeTargetAttack = targetAttack;
+
+  const attackCountsByPort = useMemo(() => attacks.reduce((counts, attack) => {
+    const port = attack.port || 2222;
+    counts.set(port, (counts.get(port) || 0) + 1);
+    return counts;
+  }, new Map()), [attacks]);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px' }}>
@@ -137,7 +136,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
             <label style={{ fontSize: '0.9rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>Choisir une session :</label>
             <select 
               value={selectedReplaySession} 
-              onChange={(e) => setSelectedReplaySession(e.target.value)}
+              onChange={(e) => handleSessionChange(e.target.value)}
               className="replay-select"
               style={{ 
                 backgroundColor: '#0f172a', 
@@ -256,7 +255,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {/* Bouton Vue Globale */}
             <button
-              onClick={() => setSelectedPortFilter('ALL')}
+              onClick={() => handlePortFilterChange('ALL')}
               style={{
                 display: 'flex',
                 justify: 'space-between',
@@ -282,13 +281,13 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
             {/* Liste dynamique des ports */}
             {availablePorts.map((port) => {
               const isLive = (activeHoneypots || []).some(h => h.port === port);
-              const count = attacks.filter(a => (a.port || 2222) === port).length;
+              const count = attackCountsByPort.get(port) || 0;
               const isSelected = selectedPortFilter === String(port);
 
               return (
                 <button
                   key={port}
-                  onClick={() => setSelectedPortFilter(String(port))}
+                  onClick={() => handlePortFilterChange(String(port))}
                   style={{
                     display: 'flex',
                     justify: 'space-between',

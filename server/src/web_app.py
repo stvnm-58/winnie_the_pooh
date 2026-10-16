@@ -10,26 +10,40 @@ import socket
 import sys
 import tempfile
 import threading
-from database import get_all_attacks, get_all_commands, get_stats
+from database import (
+    get_all_attacks,
+    get_all_commands,
+    get_country_updates,
+    get_latest_country_update_id,
+    get_stats
+)
+from paths import BAN_STATE_PATH, CONFIG_PATH
 
 # --- INITIALISATION DE FLASK EN PREMIER ---
 app = Flask(__name__)
 CORS(app)  # Permet à ton front-end d'interroger l'API sans blocage CORS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, 'data', 'config.json')
-BAN_STATE_PATH = os.path.join(BASE_DIR, '..', 'data', 'banned_ips.json')
 PORT_CHANGE_LOCK = threading.Lock()
 BAN_LOCK = threading.Lock()
 HONEYPOT_LOCK = threading.Lock()
+MAX_API_PAGE_SIZE = 500
 
 def get_current_port():
-    if os.path.exists(CONFIG_PATH):
-        try:
-            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f).get('port', 2222)
-        except (OSError, json.JSONDecodeError):
-            pass
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+    except FileNotFoundError:
+        return 2222
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"[-] Impossible de lire la configuration du port ({error}); port 2222 utilisé.")
+        return 2222
+
+    if isinstance(config, dict):
+        port = config.get('port', 2222)
+        if isinstance(port, int) and not isinstance(port, bool) and 1 <= port <= 65535:
+            return port
+    print("[-] Configuration du port invalide; port 2222 utilisé.")
     return 2222
 
 def save_configured_port(port):
@@ -99,10 +113,12 @@ def stop_honeypot_processes(processes):
             proc.kill()
             proc.wait(timeout=3)
 
-def start_honeypot(honeypot_script, port=None):
+def start_honeypot(honeypot_script, port=None, *, archive=True):
     cmd = [sys.executable, honeypot_script]
     if port:
         cmd.append(str(port))
+    if not archive:
+        cmd.append('--no-archive')
     process = subprocess.Popen(cmd, cwd=BASE_DIR)
     try:
         process.wait(timeout=1)
@@ -160,7 +176,7 @@ def api_start_honeypot():
             return jsonify({"error": f"Le port {port} est déjà utilisé ou indisponible."}), 409
 
         try:
-            process = start_honeypot(honeypot_script, port=port)
+            process = start_honeypot(honeypot_script, port=port, archive=False)
         except (OSError, RuntimeError) as error:
             return jsonify({"error": f"Échec du lancement du honeypot : {error}"}), 500
 
@@ -353,13 +369,60 @@ def api_banned_ips():
 
 @app.route('/api/attacks', methods=['GET'])
 def api_attacks():
-    attacks = get_all_attacks()
+    query, error = get_record_query_params()
+    if error:
+        return jsonify({"error": error}), 400
+    attacks = get_all_attacks(**query)
     return jsonify(attacks)
 
 @app.route('/api/commands', methods=['GET'])
 def api_commands():
-    commands = get_all_commands()
+    query, error = get_record_query_params()
+    if error:
+        return jsonify({"error": error}), 400
+    commands = get_all_commands(**query)
     return jsonify(commands)
+
+@app.route('/api/country-updates/latest', methods=['GET'])
+def api_latest_country_update():
+    return jsonify({"id": get_latest_country_update_id()})
+
+@app.route('/api/country-updates', methods=['GET'])
+def api_country_updates():
+    query, error = get_record_query_params()
+    if error:
+        return jsonify({"error": error}), 400
+    return jsonify(get_country_updates(**query))
+
+
+def get_record_query_params():
+    query = {}
+    for name in ('after_id', 'before_id'):
+        value = request.args.get(name)
+        if value is None:
+            continue
+        if not value.isdecimal() or len(value) > 19:
+            return None, f"{name} doit être un entier positif."
+        parsed_value = int(value)
+        if parsed_value > 9223372036854775807:
+            return None, f"{name} est trop grand."
+        query[name] = parsed_value
+
+    if 'after_id' in query and 'before_id' in query:
+        return None, "after_id et before_id ne peuvent pas être utilisés ensemble."
+
+    limit = request.args.get('limit')
+    if limit is None:
+        query['limit'] = MAX_API_PAGE_SIZE
+    else:
+        if (
+            not limit.isdecimal()
+            or len(limit) > 3
+            or not 1 <= int(limit) <= MAX_API_PAGE_SIZE
+        ):
+            return None, f"limit doit être compris entre 1 et {MAX_API_PAGE_SIZE}."
+        query['limit'] = int(limit)
+    return query, None
 
 @app.route('/api/stats', methods=['GET'])
 def api_stats():
@@ -427,4 +490,4 @@ def api_set_port():
 
 if __name__ == '__main__':
     print("[*] Démarrage de l'API Flask...")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)

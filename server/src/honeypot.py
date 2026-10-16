@@ -4,29 +4,50 @@ import time
 import json
 import os
 import sys
+import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 import paramiko
-from database import init_db, log_attack, archive_old_data
+from database import init_db, log_attack, update_attack_country, archive_old_data
 from fake_shell import handle_fake_shell
+from paths import CONFIG_PATH
 from utils import get_country_from_ip
 
 HOST_KEY = paramiko.RSAKey.generate(2048)
+MAX_CONNECTIONS = 128
+MAX_GEOIP_WORKERS = 8
+CONNECTION_SLOTS = threading.BoundedSemaphore(MAX_CONNECTIONS)
+GEOIP_EXECUTOR = ThreadPoolExecutor(
+    max_workers=MAX_GEOIP_WORKERS,
+    thread_name_prefix="geoip"
+)
+SHUTDOWN_EVENT = threading.Event()
 
 class HoneypotServer(paramiko.ServerInterface):
     def __init__(self, client_ip, port):
         self.client_ip = client_ip
         self.port = port
         self.event = threading.Event()
+        self.shell_lock = threading.Lock()
+        self.shell_started = False
 
     def check_auth_publickey(self, username, key):
         return paramiko.AUTH_FAILED
 
     def check_auth_password(self, username, password):
-        country = get_country_from_ip(self.client_ip)
-        print(f"[!] CONNEXION ACCEPTÉE SUR PORT {self.port} - IP: {self.client_ip} | User: {username} | Pass: {password} | Country: {country}")
-        
-        # Enregistrement de l'attaque avec le port associé
-        log_attack(self.client_ip, username, password, country, port=self.port)
-        
+        attack_id = log_attack(
+            self.client_ip, username, password, None, port=self.port
+        )
+        try:
+            future = GEOIP_EXECUTOR.submit(
+                resolve_attack_country, attack_id, self.client_ip
+            )
+            future.add_done_callback(log_country_lookup_error)
+        except RuntimeError as error:
+            print(f"[-] Géolocalisation non planifiée pour {self.client_ip}: {error}")
+        print(
+            f"[!] TENTATIVE SSH SUR PORT {self.port} - IP: {self.client_ip} "
+            f"| User: {username} | Pass: {password}"
+        )
         return paramiko.AUTH_SUCCESSFUL
 
     def get_allowed_auths(self, username):
@@ -38,11 +59,21 @@ class HoneypotServer(paramiko.ServerInterface):
         return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
 
     def check_channel_shell_request(self, channel):
-        self.event.set()
-        threading.Thread(
-            target=handle_fake_shell,
-            args=(channel, self.client_ip, self.port)
-        ).start()
+        with self.shell_lock:
+            if self.shell_started:
+                return False
+            shell_thread = threading.Thread(
+                target=handle_fake_shell,
+                args=(channel, self.client_ip, self.port),
+                daemon=True
+            )
+            try:
+                shell_thread.start()
+            except RuntimeError as error:
+                print(f"[-] Impossible de démarrer le faux shell : {error}")
+                return False
+            self.shell_started = True
+            self.event.set()
         return True
 
     def check_channel_pty_request(self, *args, **kwargs):
@@ -54,6 +85,9 @@ def handle_connection(client, addr, port):
     try:
         transport = paramiko.Transport(client)
         transport.add_server_key(HOST_KEY)
+        transport.banner_timeout = 15
+        transport.auth_timeout = 30
+        transport.channel_timeout = 30
         
         sec_opts = transport.get_security_options()
         sec_opts.kex = [k for k in sec_opts.kex if 'curve25519' not in k]
@@ -61,7 +95,8 @@ def handle_connection(client, addr, port):
         server = HoneypotServer(client_ip, port)
         transport.start_server(server=server)
         
-        server.event.wait(timeout=300)
+        if not server.event.wait(timeout=300):
+            return
         
         while transport.is_active():
             time.sleep(1)
@@ -69,32 +104,78 @@ def handle_connection(client, addr, port):
     except Exception as e:
         print(f"[-] Erreur de transport avec {client_ip} sur port {port}: {e}")
     finally:
-        if transport:
-            try:
+        try:
+            if transport:
                 transport.close()
-            except:
-                pass
+        finally:
+            client.close()
+
+
+def _handle_connection_with_slot(client, addr, port):
+    try:
+        handle_connection(client, addr, port)
+    finally:
+        CONNECTION_SLOTS.release()
+
+
+def resolve_attack_country(attack_id, client_ip):
+    country = get_country_from_ip(client_ip)
+    update_attack_country(attack_id, country)
+
+
+def log_country_lookup_error(future):
+    error = future.exception()
+    if error is not None:
+        print(f"[-] Échec de la géolocalisation d'une attaque : {error}")
+
+
+def archive_periodically():
+    while not SHUTDOWN_EVENT.wait(24 * 60 * 60):
+        try:
+            archive_old_data(days=30)
+        except (sqlite3.Error, OSError) as error:
+            print(f"[-] Erreur lors de l'archivage périodique : {error}")
 
 def get_configured_port():
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(base_dir, 'data', 'config.json')
     try:
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                port = json.load(f).get('port', 2222)
-            if isinstance(port, int) and not isinstance(port, bool) and 1 <= port <= 65535:
-                return port
-    except OSError:
-        pass
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        if not isinstance(config, dict):
+            raise ValueError("La configuration doit être un objet JSON.")
+        port = config.get('port', 2222)
+        if (
+            isinstance(port, int)
+            and not isinstance(port, bool)
+            and 1 <= port <= 65535
+        ):
+            return port
+        raise ValueError("Le port configuré doit être compris entre 1 et 65535.")
+    except FileNotFoundError:
+        return 2222
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        print(f"[-] Configuration du port invalide ({error}); port 2222 utilisé.")
     return 2222
 
 def main():
     init_db()
-    archive_old_data(days=30)
+    is_primary_instance = '--no-archive' not in sys.argv[1:]
+    if is_primary_instance:
+        archive_old_data(days=30)
+        threading.Thread(
+            target=archive_periodically,
+            name="database-archiver",
+            daemon=True
+        ).start()
     
     # Récupération du port (soit passé en argument par le dashboard, soit via config.json)
-    if len(sys.argv) > 1 and sys.argv[1].isdigit():
-        port = int(sys.argv[1])
+    port_argument = next(
+        (argument for argument in sys.argv[1:] if argument.isdecimal()),
+        None
+    )
+    if port_argument is not None:
+        port = int(port_argument)
+        if not 1 <= port <= 65535:
+            raise ValueError("Le port doit être compris entre 1 et 65535.")
     else:
         port = get_configured_port()
     
@@ -105,10 +186,28 @@ def main():
     
     print(f"[*] Honeypot SSH (Deception Mesh Node) démarré sur le port {port}...")
 
-    while True:
-        client, addr = server_socket.accept()
-        print(f"[*] Connexion entrante sur le port {port} depuis {addr[0]}:{addr[1]}")
-        threading.Thread(target=handle_connection, args=(client, addr, port)).start()
+    try:
+        while True:
+            client, addr = server_socket.accept()
+            if not CONNECTION_SLOTS.acquire(blocking=False):
+                print(f"[-] Trop de connexions actives; rejet de {addr[0]}:{addr[1]}")
+                client.close()
+                continue
+
+            print(f"[*] Connexion entrante sur le port {port} depuis {addr[0]}:{addr[1]}")
+            try:
+                threading.Thread(
+                    target=_handle_connection_with_slot,
+                    args=(client, addr, port),
+                    daemon=True
+                ).start()
+            except RuntimeError as error:
+                CONNECTION_SLOTS.release()
+                client.close()
+                print(f"[-] Impossible de créer le thread de connexion : {error}")
+    finally:
+        SHUTDOWN_EVENT.set()
+        server_socket.close()
 
 if __name__ == "__main__":
     main()

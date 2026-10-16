@@ -2,8 +2,12 @@
 import os
 from database import log_command
 
+MAX_COMMAND_LENGTH = 4096
+
+
 def handle_fake_shell(channel, client_ip, port=2222):
     try:
+        channel.settimeout(300)
         virtual_fs = {
             "/root": ["config.json", "backups.zip", "root.txt", ".ssh"],
             "/root/.ssh": ["authorized_keys", "id_rsa"],
@@ -25,6 +29,7 @@ def handle_fake_shell(channel, client_ip, port=2222):
         channel.send(f"root@ubuntu:{current_dir}# ".encode())
         
         buffer = b""
+        overflow_bytes = 0
         while True:
             data = channel.recv(1024)
             if not data:
@@ -34,10 +39,16 @@ def handle_fake_shell(channel, client_ip, port=2222):
                 char = bytes([byte])
                 
                 if char in (b'\x7f', b'\b'):
-                    if len(buffer) > 0:
+                    if overflow_bytes:
+                        overflow_bytes -= 1
+                        channel.send(b'\b \b')
+                    elif len(buffer) > 0:
                         buffer = buffer[:-1]
                         channel.send(b'\b \b')
                 
+                elif char == b'\t' and overflow_bytes:
+                    channel.send(b'\x07')
+
                 elif char == b'\t':
                     cmd_str = buffer.decode("utf-8", errors="ignore")
                     parts = cmd_str.split(" ")
@@ -74,7 +85,11 @@ def handle_fake_shell(channel, client_ip, port=2222):
                         channel.send(b_data)
                         response_buffer.append(b_data.decode("utf-8", errors="ignore"))
 
-                    if cmd.lower() in ("exit", "quit"):
+                    if overflow_bytes:
+                        shell_output(
+                            f"bash: command exceeds the {MAX_COMMAND_LENGTH}-byte limit\r\n"
+                        )
+                    elif cmd.lower() in ("exit", "quit"):
                         shell_output("logout\r\n")
                         if cmd != "":
                             log_command(client_ip, cmd, current_dir, "".join(response_buffer), port=port)
@@ -231,10 +246,15 @@ def handle_fake_shell(channel, client_ip, port=2222):
                     
                     shell_output(f"root@ubuntu:{current_dir}# ")
                     buffer = b""
+                    overflow_bytes = 0
                 
                 else:
-                    buffer += char
-                    channel.send(char)
+                    if len(buffer) < MAX_COMMAND_LENGTH:
+                        buffer += char
+                        channel.send(char)
+                    else:
+                        overflow_bytes += 1
+                        channel.send(b'\x07')
                     
     except Exception as e:
         print(f"[-] Erreur dans le faux shell : {e}")

@@ -1,10 +1,73 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import SessionReplay from './pages/SessionReplay';
 import MeshManager from './pages/MeshManager';
 import FirewallManager from './pages/FirewallManager';
 import './App.css';
+
+const API_BASE_URL = 'http://localhost:5000/api';
+const API_PAGE_SIZE = 500;
+
+async function fetchJson(url, signal) {
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    throw new Error(`API ${response.status}: ${url}`);
+  }
+  return response.json();
+}
+
+async function fetchAllRecords(endpoint, signal) {
+  const records = [];
+  let beforeId;
+
+  while (true) {
+    const params = new URLSearchParams({ limit: String(API_PAGE_SIZE) });
+    if (beforeId !== undefined) params.set('before_id', String(beforeId));
+    const page = await fetchJson(`${API_BASE_URL}/${endpoint}?${params}`, signal);
+    records.push(...page);
+
+    if (page.length < API_PAGE_SIZE) return records;
+    const nextBeforeId = Math.min(...page.map(record => record.id));
+    if (beforeId !== undefined && nextBeforeId >= beforeId) {
+      throw new Error(`Le curseur de pagination de ${endpoint} n'avance pas.`);
+    }
+    beforeId = nextBeforeId;
+  }
+}
+
+async function fetchNewRecords(endpoint, afterId, signal) {
+  const records = [];
+  let cursor = afterId;
+
+  while (true) {
+    const params = new URLSearchParams({
+      after_id: String(cursor),
+      limit: String(API_PAGE_SIZE)
+    });
+    const page = await fetchJson(`${API_BASE_URL}/${endpoint}?${params}`, signal);
+    records.push(...page);
+
+    if (page.length < API_PAGE_SIZE) return records.reverse();
+    const nextCursor = Math.max(...page.map(record => record.id));
+    if (nextCursor <= cursor) {
+      throw new Error(`Le curseur de mise à jour de ${endpoint} n'avance pas.`);
+    }
+    cursor = nextCursor;
+  }
+}
+
+function applyCountryUpdates(attacks, updates) {
+  if (!updates.length) return attacks;
+  const countryByAttackId = new Map(
+    updates.map(update => [update.attack_id, update.country])
+  );
+  return attacks.map(attack => (
+    countryByAttackId.has(attack.id)
+      ? { ...attack, country: countryByAttackId.get(attack.id) }
+      : attack
+  ));
+}
 
 function App() {
   const [attacks, setAttacks] = useState([]);
@@ -13,39 +76,102 @@ function App() {
   const [activeHoneypots, setActiveHoneypots] = useState([]);
   const [selectedSessions, setSelectedSessions] = useState([]);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const attacksCursor = useRef(0);
+  const commandsCursor = useRef(0);
+  const countryUpdatesCursor = useRef(0);
+  const hasLoadedData = useRef(false);
+  const lastStatsFetch = useRef(0);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const fetchData = async () => {
-    try {
-      const [resAttacks, resCmds, resStats, resHoneypots] = await Promise.all([
-        fetch('http://localhost:5000/api/attacks'),
-        fetch('http://localhost:5000/api/commands'),
-        fetch('http://localhost:5000/api/stats'),
-        fetch('http://localhost:5000/api/honeypots')
-      ]);
-
-      if (resAttacks.ok) setAttacks(await resAttacks.json());
-      if (resCmds.ok) setCommands(await resCmds.json());
-      if (resStats.ok) setStats(await resStats.json());
-      if (resHoneypots.ok) {
-        const honeypotData = await resHoneypots.json();
-        setActiveHoneypots(honeypotData.honeypots);
-      }
-    } catch (err) {
-      console.error("Erreur de connexion API :", err);
-    }
-  };
-
   useEffect(() => {
+    const controller = new AbortController();
+    let timer;
+    let cancelled = false;
+
+    const fetchData = async () => {
+      try {
+        const isInitialLoad = !hasLoadedData.current;
+        if (isInitialLoad) {
+          const latestCountryUpdate = await fetchJson(
+            `${API_BASE_URL}/country-updates/latest`,
+            controller.signal
+          );
+          countryUpdatesCursor.current = latestCountryUpdate.id;
+        }
+        const attacksRequest = isInitialLoad
+          ? fetchAllRecords('attacks', controller.signal)
+          : fetchNewRecords('attacks', attacksCursor.current, controller.signal);
+        const commandsRequest = isInitialLoad
+          ? fetchAllRecords('commands', controller.signal)
+          : fetchNewRecords('commands', commandsCursor.current, controller.signal);
+        const countryUpdatesRequest = fetchNewRecords(
+          'country-updates',
+          countryUpdatesCursor.current,
+          controller.signal
+        );
+        const shouldRefreshStats = isInitialLoad || Date.now() - lastStatsFetch.current >= 15000;
+        const [newAttacks, newCommands, countryUpdates, newStats, honeypotData] = await Promise.all([
+          attacksRequest,
+          commandsRequest,
+          countryUpdatesRequest,
+          shouldRefreshStats
+            ? fetchJson(`${API_BASE_URL}/stats`, controller.signal)
+            : Promise.resolve(null),
+          fetchJson(`${API_BASE_URL}/honeypots`, controller.signal)
+        ]);
+
+        if (cancelled) return;
+
+        if (isInitialLoad) {
+          setAttacks(applyCountryUpdates(newAttacks, countryUpdates));
+          setCommands(newCommands);
+          hasLoadedData.current = true;
+        } else {
+          if (newAttacks.length || countryUpdates.length) {
+            setAttacks(current => applyCountryUpdates(
+              [...newAttacks, ...current],
+              countryUpdates
+            ));
+          }
+          if (newCommands.length) setCommands(current => [...newCommands, ...current]);
+        }
+
+        attacksCursor.current = newAttacks.reduce(
+          (maxId, attack) => Math.max(maxId, attack.id),
+          attacksCursor.current
+        );
+        commandsCursor.current = newCommands.reduce(
+          (maxId, command) => Math.max(maxId, command.id),
+          commandsCursor.current
+        );
+        countryUpdatesCursor.current = countryUpdates.reduce(
+          (maxId, update) => Math.max(maxId, update.id),
+          countryUpdatesCursor.current
+        );
+        if (newStats) {
+          setStats(newStats);
+          lastStatsFetch.current = Date.now();
+        }
+        setActiveHoneypots(honeypotData.honeypots);
+      } catch (err) {
+        if (!cancelled && err.name !== 'AbortError') {
+          console.error("Erreur de connexion API :", err);
+        }
+      } finally {
+        if (!cancelled) timer = setTimeout(fetchData, 5000);
+      }
+    };
+
     fetchData();
-    const interval = setInterval(() => {
-      fetchData();
-    }, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timer);
+    };
   }, []);
 
   const formatDate = (dateString) => {
@@ -74,9 +200,9 @@ function App() {
       return;
     }
     if (selectedSessions.includes(attackId)) {
-      setSelectedSessions(selectedSessions.filter(id => id !== attackId));
+      setSelectedSessions(current => current.filter(id => id !== attackId));
     } else {
-      setSelectedSessions([...selectedSessions, attackId]);
+      setSelectedSessions(current => [...current, attackId]);
     }
   };
 

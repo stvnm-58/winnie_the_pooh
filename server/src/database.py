@@ -1,206 +1,322 @@
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timezone
+from contextlib import contextmanager
+from paths import SERVER_DATA_DIR
 
-DB_PATH = os.path.join(os.path.dirname(__file__), '../data/honeypot.db')
-ARCHIVE_PATH = os.path.join(os.path.dirname(__file__), '../data/archive.db')
+DB_PATH = os.path.join(SERVER_DATA_DIR, 'honeypot.db')
+ARCHIVE_PATH = os.path.join(SERVER_DATA_DIR, 'archive.db')
+ARCHIVE_BATCH_SIZE = 500
+
+
+@contextmanager
+def _connect(path=None):
+    if path is None:
+        path = DB_PATH
+    conn = sqlite3.connect(path, timeout=10)
+    try:
+        conn.execute('PRAGMA synchronous=NORMAL')
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _utc_timestamp():
+    return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     
     # 1. Initialisation de la base active (honeypot.db)
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute('PRAGMA journal_mode=WAL')
     
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS attacks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME,
-            ip_address TEXT,
-            username TEXT,
-            password TEXT,
-            country TEXT,
-            port INTEGER DEFAULT 2222
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS attacks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME,
+                ip_address TEXT,
+                username TEXT,
+                password TEXT,
+                country TEXT,
+                port INTEGER DEFAULT 2222
+            )
+        ''')
     
-    # Migration automatique si la colonne 'port' manque sur une ancienne base active
-    cursor.execute("PRAGMA table_info(attacks)")
-    columns = [col[1] for col in cursor.fetchall()]
-    if 'port' not in columns:
-        cursor.execute("ALTER TABLE attacks ADD COLUMN port INTEGER DEFAULT 2222")
+        cursor.execute("PRAGMA table_info(attacks)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'port' not in columns:
+            cursor.execute("ALTER TABLE attacks ADD COLUMN port INTEGER DEFAULT 2222")
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS commands (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME,
-            ip_address TEXT,
-            command TEXT,
-            current_dir TEXT,
-            response TEXT,
-            port INTEGER DEFAULT 2222
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS commands (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp DATETIME,
+                ip_address TEXT,
+                command TEXT,
+                current_dir TEXT,
+                response TEXT,
+                port INTEGER DEFAULT 2222
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS attack_country_updates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                attack_id INTEGER NOT NULL,
+                country TEXT NOT NULL
+            )
+        ''')
+        cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_country_updates_attack '
+            'ON attack_country_updates(attack_id)'
         )
-    ''')
 
-    cursor.execute("PRAGMA table_info(commands)")
-    command_columns = [col[1] for col in cursor.fetchall()]
-    if 'port' not in command_columns:
-        cursor.execute("ALTER TABLE commands ADD COLUMN port INTEGER DEFAULT 2222")
+        cursor.execute("PRAGMA table_info(commands)")
+        command_columns = [col[1] for col in cursor.fetchall()]
+        if 'port' not in command_columns:
+            cursor.execute("ALTER TABLE commands ADD COLUMN port INTEGER DEFAULT 2222")
     
-    # Index pour accélérer les recherches sur la base active
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_commands_timestamp ON commands(timestamp)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_attacks_timestamp ON attacks(timestamp)')
-    
-    conn.commit()
-    conn.close()
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_commands_timestamp ON commands(timestamp, id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_attacks_timestamp ON attacks(timestamp, id)')
+        cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_commands_timestamp_utc '
+            'ON commands(datetime(timestamp), id)'
+        )
+        cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_attacks_timestamp_utc '
+            'ON attacks(datetime(timestamp), id)'
+        )
+        cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_commands_session '
+            'ON commands(ip_address, port, timestamp)'
+        )
+        cursor.execute(
+            'CREATE INDEX IF NOT EXISTS idx_attacks_session '
+            'ON attacks(ip_address, port, timestamp)'
+        )
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_attacks_ip ON attacks(ip_address)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_attacks_country ON attacks(country)')
 
     # 2. Initialisation de la base d'archives (archive.db)
-    conn_arch = sqlite3.connect(ARCHIVE_PATH)
-    cursor_arch = conn_arch.cursor()
+    with _connect(ARCHIVE_PATH) as conn_arch:
+        cursor_arch = conn_arch.cursor()
     
-    cursor_arch.execute('''
-        CREATE TABLE IF NOT EXISTS attacks (
-            id INTEGER PRIMARY KEY,
-            timestamp DATETIME,
-            ip_address TEXT,
-            username TEXT,
-            password TEXT,
-            country TEXT,
-            port INTEGER DEFAULT 2222
-        )
-    ''')
+        cursor_arch.execute('''
+            CREATE TABLE IF NOT EXISTS attacks (
+                id INTEGER PRIMARY KEY,
+                timestamp DATETIME,
+                ip_address TEXT,
+                username TEXT,
+                password TEXT,
+                country TEXT,
+                port INTEGER DEFAULT 2222
+            )
+        ''')
 
-    # Migration automatique si la colonne 'port' manque sur la base d'archives
-    cursor_arch.execute("PRAGMA table_info(attacks)")
-    arch_columns = [col[1] for col in cursor_arch.fetchall()]
-    if 'port' not in arch_columns:
-        cursor_arch.execute("ALTER TABLE attacks ADD COLUMN port INTEGER DEFAULT 2222")
+        cursor_arch.execute("PRAGMA table_info(attacks)")
+        arch_columns = [col[1] for col in cursor_arch.fetchall()]
+        if 'port' not in arch_columns:
+            cursor_arch.execute("ALTER TABLE attacks ADD COLUMN port INTEGER DEFAULT 2222")
     
-    cursor_arch.execute('''
-        CREATE TABLE IF NOT EXISTS commands (
-            id INTEGER PRIMARY KEY,
-            timestamp DATETIME,
-            ip_address TEXT,
-            command TEXT,
-            current_dir TEXT,
-            response TEXT,
-            port INTEGER DEFAULT 2222
-        )
-    ''')
+        cursor_arch.execute('''
+            CREATE TABLE IF NOT EXISTS commands (
+                id INTEGER PRIMARY KEY,
+                timestamp DATETIME,
+                ip_address TEXT,
+                command TEXT,
+                current_dir TEXT,
+                response TEXT,
+                port INTEGER DEFAULT 2222
+            )
+        ''')
 
-    cursor_arch.execute("PRAGMA table_info(commands)")
-    arch_command_columns = [col[1] for col in cursor_arch.fetchall()]
-    if 'port' not in arch_command_columns:
-        cursor_arch.execute("ALTER TABLE commands ADD COLUMN port INTEGER DEFAULT 2222")
-    
-    conn_arch.commit()
-    conn_arch.close()
+        cursor_arch.execute("PRAGMA table_info(commands)")
+        arch_command_columns = [col[1] for col in cursor_arch.fetchall()]
+        if 'port' not in arch_command_columns:
+            cursor_arch.execute("ALTER TABLE commands ADD COLUMN port INTEGER DEFAULT 2222")
 
 def archive_old_data(days=30):
     """Déplace les données de plus de X jours vers archive.db et nettoie honeypot.db."""
     if not os.path.exists(DB_PATH) or not os.path.exists(ARCHIVE_PATH):
         return
 
-    conn = sqlite3.connect(DB_PATH)
-    conn_arch = sqlite3.connect(ARCHIVE_PATH)
-    
-    try:
+    moved_attacks = 0
+    moved_commands = 0
+    with _connect() as conn, _connect(ARCHIVE_PATH) as conn_arch:
         cursor = conn.cursor()
-        
-        # --- Archivage des attaques ---
-        cursor.execute("SELECT id, timestamp, ip_address, username, password, country, port FROM attacks WHERE timestamp < datetime('now', '-' || ? || ' days')", (days,))
-        old_attacks = cursor.fetchall()
-        
-        if old_attacks:
-            conn_arch.executemany('''
-                INSERT OR IGNORE INTO attacks (id, timestamp, ip_address, username, password, country, port)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', old_attacks)
-            cursor.execute("DELETE FROM attacks WHERE timestamp < datetime('now', '-' || ? || ' days')", (days,))
+        cutoff = "datetime('now', '-' || ? || ' days')"
 
-        # --- Archivage des commandes ---
-        cursor.execute("SELECT id, timestamp, ip_address, command, current_dir, response, port FROM commands WHERE timestamp < datetime('now', '-' || ? || ' days')", (days,))
-        old_commands = cursor.fetchall()
-        
-        if old_commands:
-            conn_arch.executemany('''
-                INSERT OR IGNORE INTO commands (id, timestamp, ip_address, command, current_dir, response, port)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', old_commands)
-            cursor.execute("DELETE FROM commands WHERE timestamp < datetime('now', '-' || ? || ' days')", (days,))
+        for table, columns in (
+            ('attacks', 'id, timestamp, ip_address, username, password, country, port'),
+            ('commands', 'id, timestamp, ip_address, command, current_dir, response, port'),
+        ):
+            while True:
+                cursor.execute(
+                    f"SELECT {columns} FROM {table} "
+                    f"WHERE datetime(timestamp) < {cutoff} ORDER BY id LIMIT ?",
+                    (days, ARCHIVE_BATCH_SIZE)
+                )
+                rows = cursor.fetchall()
+                if not rows:
+                    break
 
-        conn_arch.commit()
-        conn.commit()
-        
-        conn.execute("VACUUM")
-        
-        if old_attacks or old_commands:
-            print(f"[*] Archivage réussi : {len(old_attacks)} attaques et {len(old_commands)} commandes déplacées vers archive.db.")
-        
-    except Exception as e:
-        print(f"[-] Erreur lors de l'archivage : {e}")
-    finally:
-        conn.close()
-        conn_arch.close()
+                placeholders = ', '.join('?' for _ in rows[0])
+                conn_arch.executemany(
+                    f"INSERT OR IGNORE INTO {table} ({columns}) VALUES ({placeholders})",
+                    rows
+                )
+                conn_arch.commit()
+                if table == 'attacks':
+                    cursor.executemany(
+                        'DELETE FROM attack_country_updates WHERE attack_id = ?',
+                        [(row[0],) for row in rows]
+                    )
+                cursor.executemany(
+                    f"DELETE FROM {table} WHERE id = ?",
+                    [(row[0],) for row in rows]
+                )
+                conn.commit()
+                if table == 'attacks':
+                    moved_attacks += len(rows)
+                else:
+                    moved_commands += len(rows)
+
+    if moved_attacks or moved_commands:
+        with _connect() as conn:
+            conn.execute("VACUUM")
+        print(
+            f"[*] Archivage réussi : {moved_attacks} attaques et "
+            f"{moved_commands} commandes déplacées vers archive.db."
+        )
 
 def log_attack(ip_address, username, password, country, port=2222):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    cursor.execute('''
-        INSERT INTO attacks (timestamp, ip_address, username, password, country, port)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (current_time, ip_address, username, password, country, port))
-    conn.commit()
-    conn.close()
+    with _connect() as conn:
+        cursor = conn.execute('''
+            INSERT INTO attacks (timestamp, ip_address, username, password, country, port)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (_utc_timestamp(), ip_address, username, password, country, port))
+        return cursor.lastrowid
 
 def log_command(ip_address, command, current_dir, response, port=2222):
     """Enregistre une commande exécutée et sa réponse dans le faux shell."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    cursor.execute('''
-        INSERT INTO commands (timestamp, ip_address, command, current_dir, response, port)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (current_time, ip_address, command, current_dir, response, port))
-    conn.commit()
-    conn.close()
+    with _connect() as conn:
+        cursor = conn.execute('''
+            INSERT INTO commands (timestamp, ip_address, command, current_dir, response, port)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (_utc_timestamp(), ip_address, command, current_dir, response, port))
+        return cursor.lastrowid
 
-def get_all_attacks():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, timestamp, ip_address, username, password, country, port FROM attacks ORDER BY timestamp DESC')
-    attacks = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return attacks
+def update_attack_country(attack_id, country):
+    with _connect() as conn:
+        cursor = conn.execute(
+            'UPDATE attacks SET country = ? WHERE id = ?',
+            (country, attack_id)
+        )
+        if cursor.rowcount:
+            conn.execute(
+                'INSERT INTO attack_country_updates (attack_id, country) VALUES (?, ?)',
+                (attack_id, country)
+            )
 
-def get_all_commands():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM commands ORDER BY timestamp DESC')
-    commands = [dict(row) for row in cursor.fetchall()]
-    conn.close()
-    return commands
+
+def get_country_updates(after_id=None, before_id=None, limit=None):
+    query = 'SELECT id, attack_id, country FROM attack_country_updates'
+    clauses = []
+    params = []
+    if after_id is not None:
+        clauses.append('id > ?')
+        params.append(after_id)
+    if before_id is not None:
+        clauses.append('id < ?')
+        params.append(before_id)
+    if clauses:
+        query += ' WHERE ' + ' AND '.join(clauses)
+    query += ' ORDER BY id ASC' if after_id is not None else ' ORDER BY id DESC'
+    if limit is not None:
+        query += ' LIMIT ?'
+        params.append(limit)
+
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
+
+
+def get_latest_country_update_id():
+    with _connect() as conn:
+        return conn.execute(
+            'SELECT COALESCE(MAX(id), 0) FROM attack_country_updates'
+        ).fetchone()[0]
+
+def _get_records(table, columns, after_id=None, before_id=None, limit=None):
+    if table not in ('attacks', 'commands'):
+        raise ValueError(f"Table non supportée : {table}")
+
+    query = f"SELECT {columns} FROM {table}"
+    clauses = []
+    params = []
+    if after_id is not None:
+        clauses.append('id > ?')
+        params.append(after_id)
+    if before_id is not None:
+        clauses.append('id < ?')
+        params.append(before_id)
+    if clauses:
+        query += ' WHERE ' + ' AND '.join(clauses)
+    if after_id is not None:
+        query += ' ORDER BY id ASC'
+    elif before_id is not None or limit is not None:
+        query += ' ORDER BY id DESC'
+    else:
+        query += ' ORDER BY datetime(timestamp) DESC, id DESC'
+    if limit is not None:
+        query += ' LIMIT ?'
+        params.append(limit)
+
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        return [dict(row) for row in conn.execute(query, params).fetchall()]
+
+def get_all_attacks(after_id=None, before_id=None, limit=None):
+    return _get_records(
+        'attacks',
+        'id, timestamp, ip_address, username, password, country, port',
+        after_id,
+        before_id,
+        limit
+    )
+
+def get_all_commands(after_id=None, before_id=None, limit=None):
+    return _get_records(
+        'commands',
+        'id, timestamp, ip_address, command, current_dir, response, port',
+        after_id,
+        before_id,
+        limit
+    )
 
 def get_stats():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT COUNT(*) FROM attacks')
-    total_attacks = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(DISTINCT ip_address) FROM attacks')
-    unique_ips = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM commands')
-    total_commands = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT country, COUNT(*) as count FROM attacks WHERE country IS NOT NULL GROUP BY country ORDER BY count DESC LIMIT 5')
-    top_countries = [{"country": row[0], "count": row[1]} for row in cursor.fetchall()]
-    
-    conn.close()
+    with _connect() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM attacks')
+        total_attacks = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(DISTINCT ip_address) FROM attacks')
+        unique_ips = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(*) FROM commands')
+        total_commands = cursor.fetchone()[0]
+        cursor.execute('''
+            SELECT country, COUNT(*) as count
+            FROM attacks
+            WHERE country IS NOT NULL
+            GROUP BY country
+            ORDER BY count DESC
+            LIMIT 5
+        ''')
+        top_countries = [{"country": row[0], "count": row[1]} for row in cursor.fetchall()]
     
     return {
         "total_attacks": total_attacks,

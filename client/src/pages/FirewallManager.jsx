@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function FirewallManager() {
   const [bannedIps, setBannedIps] = useState([]);
@@ -19,9 +19,12 @@ export default function FirewallManager() {
   };
 
   useEffect(() => {
-    fetchBannedIps();
+    const initialFetch = setTimeout(fetchBannedIps, 0);
     const interval = setInterval(fetchBannedIps, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialFetch);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleManualBan = async (e) => {
@@ -43,7 +46,7 @@ export default function FirewallManager() {
       } else {
         setErrorMsg(data.error || "Erreur lors du bannissement de l'IP.");
       }
-    } catch (err) {
+    } catch {
       setErrorMsg("Impossible de joindre l'API Flask.");
     } finally {
       setLoading(false);
@@ -63,7 +66,7 @@ export default function FirewallManager() {
         const data = await res.json();
         alert(data.error || "Erreur lors du débannissement.");
       }
-    } catch (err) {
+    } catch {
       alert("Erreur réseau.");
     }
   };

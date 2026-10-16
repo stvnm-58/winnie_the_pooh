@@ -179,15 +179,22 @@ La base de données contient une unique table relationnelle nommée attacks :
 ## 5. Spécifications des API
 
 ### 5.1 API Externes
-* **API de Géolocalisation IP (ex: *ipapi.co*)** : Utilisée optionnellement pour enrichir les logs IP avec le pays d'origine de l'attaque.
+* **API de Géolocalisation IP (ex: *ipapi.co*)** : L'enrichissement est effectué en arrière-plan après l'enregistrement de la tentative. Les résultats sont mis en cache pendant 24 heures (5 minutes pour les résultats inconnus) ; les adresses non publiques ne sont pas envoyées au service externe.
 
 ### 5.2 Endpoints de l'API Interne (Flask)
 ```text
-| Chemin URL (`Path`) | Méthode HTTP | Format d'entrée | Format de sortie | Description |
+| Chemin URL (`Path`) | Méthode HTTP | Paramètres de requête | Format de sortie | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `/api/attacks` | `GET` | Aucun | JSON (Liste d'objets) | Récupère toutes les tentatives d'authentification SSH. |
+| `/api/attacks` | `GET` | `limit` (1-500), `before_id` ou `after_id` | JSON (Liste d'objets) | Récupère une page de tentatives. Sans curseur, retourne les plus récents IDs. |
+| `/api/commands` | `GET` | `limit` (1-500), `before_id` ou `after_id` | JSON (Liste d'objets) | Récupère une page de commandes. |
+| `/api/country-updates/latest` | `GET` | Aucun | JSON (`id`) | Retourne le curseur de départ des mises à jour de géolocalisation. |
+| `/api/country-updates` | `GET` | `limit` (1-500), `after_id` | JSON (Liste d'objets) | Récupère les pays ajoutés après la capture, sans recharger les attaques. |
 | `/api/stats` | `GET` | Aucun | JSON (Objet) | Fournit les indicateurs clés (total attaques, IPs uniques). |
 ```
+
+Les endpoints d'attaques et de commandes limitent chaque réponse à 500 entrées par défaut. Pour charger les plus anciennes, réutiliser le plus petit `id` de la page dans `before_id`; pour obtenir les entrées ajoutées depuis un curseur, utiliser `after_id`. Les mises à jour GeoIP sont diffusées séparément afin que l'enrichissement asynchrone apparaisse sans renvoyer l'historique. Les nouveaux horodatages sont stockés en UTC avec le suffixe `Z`. Le honeypot conserve les données récentes dans SQLite avec WAL et archive les données de plus de 30 jours par lots. Seule l'instance principale effectue l'archivage ; les instances secondaires lancées par le dashboard utilisent l'option interne `--no-archive`.
+
+Le port principal est configuré dans `server/data/config.json`. Le listener SSH, l'API et la gestion du pare-feu utilisent ce même fichier ; les bases SQLite et l'état des IP bannies sont également conservés dans `server/data/`.
 ---
 
 ## 6. Stratégies SCM et QA
@@ -202,7 +209,15 @@ La base de données contient une unique table relationnelle nommée attacks :
   * *Tests unitaires :* Validation des fonctions d'insertion SQL et de l'interception Paramiko.
   * *Tests d'intégration / API :* Vérification des endpoints Flask.
   * *Tests fonctionnels :* Simulation manuelle d'une attaque avec un client SSH local (`ssh root@localhost -p 2222`).
-* **Outils :** `pytest` pour le back-end, Postman / `curl` pour l'API.
+* **Outils :** `unittest` (bibliothèque standard Python) pour les tests backend, Postman / `curl` pour l'API.
+
+Depuis le dossier `server`, lancer les tests automatisés avec :
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Les tests utilisent des bases SQLite temporaires et ne modifient pas les données du honeypot.
 
 ---
 

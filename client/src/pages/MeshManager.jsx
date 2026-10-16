@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export default function MeshManager() {
@@ -27,9 +27,12 @@ export default function MeshManager() {
   };
 
   useEffect(() => {
-    fetchHoneypots();
+    const initialFetch = setTimeout(fetchHoneypots, 0);
     const interval = setInterval(fetchHoneypots, 4000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialFetch);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleDeploy = async (e) => {
@@ -55,7 +58,7 @@ export default function MeshManager() {
       } else {
         setErrorMsg(data.error || 'Erreur lors du déploiement.');
       }
-    } catch (err) {
+    } catch {
       setErrorMsg("Impossible de joindre l'API Flask.");
     } finally {
       setLoading(false);
@@ -75,7 +78,7 @@ export default function MeshManager() {
         const data = await res.json();
         alert(data.error || "Erreur lors de l'arrêt.");
       }
-    } catch (err) {
+    } catch {
       alert("Erreur réseau.");
     }
   };
@@ -95,32 +98,73 @@ export default function MeshManager() {
 
     setEditError('');
     try {
-      // 1. Stopper l'ancien honeypot
-      const stopRes = await fetch(`http://localhost:5000/api/honeypots/${oldPort}`, {
-        method: 'DELETE'
-      });
-      if (!stopRes.ok) {
-        const errData = await stopRes.json();
-        setEditError(errData.error || "Erreur lors de l'arrêt de l'ancien port.");
+      const portRes = await fetch('http://localhost:5000/api/port');
+      const portData = await portRes.json();
+      if (!portRes.ok) {
+        setEditError(portData.error || "Impossible de vérifier le port principal.");
         return;
       }
 
-      // 2. Déployer sur le nouveau port
+      if (portData.port === oldPort) {
+        const updateRes = await fetch('http://localhost:5000/api/port', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ port: targetPort })
+        });
+        const updateData = await updateRes.json();
+        if (!updateRes.ok) {
+          setEditError(updateData.error || "Erreur lors du changement du port principal.");
+          return;
+        }
+
+        setEditingPort(null);
+        setNewPortInput('');
+        await fetchHoneypots();
+        return;
+      }
+
       const startRes = await fetch('http://localhost:5000/api/honeypots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ port: targetPort })
       });
-      
-      if (startRes.ok) {
-        setEditingPort(null);
-        setNewPortInput('');
-        await fetchHoneypots();
-      } else {
-        const errData = await startRes.json();
+      const startData = await startRes.json();
+      if (!startRes.ok) {
+        const errData = startData;
         setEditError(errData.error || "Erreur lors du déploiement sur le nouveau port.");
+        return;
       }
-    } catch (err) {
+
+      const stopRes = await fetch(`http://localhost:5000/api/honeypots/${oldPort}`, {
+        method: 'DELETE'
+      });
+      if (!stopRes.ok) {
+        const stopData = await stopRes.json();
+        let rollbackMessage;
+        try {
+          const rollbackRes = await fetch(`http://localhost:5000/api/honeypots/${targetPort}`, {
+            method: 'DELETE'
+          });
+          const rollbackData = rollbackRes.ok ? null : await rollbackRes.json();
+          rollbackMessage = rollbackData
+            ? `Le nouveau honeypot reste actif sur le port ${targetPort} : ${
+                rollbackData.error || 'impossible de l’arrêter.'
+              }`
+            : 'Le nouveau honeypot a été arrêté.';
+        } catch {
+          rollbackMessage = `Impossible de confirmer l’arrêt du nouveau honeypot sur le port ${targetPort}.`;
+        }
+        setEditError(
+          `${stopData.error || "Erreur lors de l'arrêt de l'ancien port."} ${rollbackMessage}`
+        );
+        await fetchHoneypots();
+        return;
+      }
+
+      setEditingPort(null);
+      setNewPortInput('');
+      await fetchHoneypots();
+    } catch {
       setEditError("Erreur réseau lors du changement de port.");
     }
   };

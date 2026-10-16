@@ -1,5 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import './Dashboard.css';
+
+function parseDate(dateString) {
+  if (!dateString) return new Date(0);
+  let str = dateString;
+  if (!str.endsWith('Z') && !str.includes('+') && !str.includes('T')) {
+    str = str.replace(' ', 'T') + 'Z';
+  }
+  return new Date(str);
+}
 
 export default function Dashboard({ 
   attacks, 
@@ -38,9 +47,12 @@ export default function Dashboard({
   };
 
   useEffect(() => {
-    fetchBannedIps();
+    const initialFetch = setTimeout(fetchBannedIps, 0);
     const interval = setInterval(fetchBannedIps, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialFetch);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleToggleBan = async (ipAddress) => {
@@ -62,7 +74,7 @@ export default function Dashboard({
       } else {
         alert(data.error || "Erreur lors de l'action sur le pare-feu.");
       }
-    } catch (err) {
+    } catch {
       alert("Erreur de connexion réseau avec l'API Flask.");
     } finally {
       setBanLoadingIp(null);
@@ -70,18 +82,18 @@ export default function Dashboard({
   };
 
   // Liste globale des ports (armada active + historique)
-  const availablePorts = [...new Set([
+  const availablePorts = useMemo(() => [...new Set([
     ...(activeHoneypots || []).map(h => h.port),
     ...attacks.map(a => a.port || 2222)
-  ])].sort((a, b) => a - b);
+  ])].sort((a, b) => a - b), [activeHoneypots, attacks]);
 
   // Filtrage des attaques par port
-  const filteredByPortAttacks = attacks.filter(att => {
+  const filteredByPortAttacks = useMemo(() => attacks.filter(att => {
     if (selectedPortFilter === 'ALL') return true;
     return (att.port || 2222) === Number(selectedPortFilter);
-  });
+  }), [attacks, selectedPortFilter]);
 
-  const filteredTopCountries = Object.entries(
+  const filteredTopCountries = useMemo(() => Object.entries(
     filteredByPortAttacks.reduce((counts, attack) => {
       if (attack.country) counts[attack.country] = (counts[attack.country] || 0) + 1;
       return counts;
@@ -89,20 +101,11 @@ export default function Dashboard({
   )
     .map(([country, count]) => ({ country, count }))
     .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+    .slice(0, 5), [filteredByPortAttacks]);
 
   const visibleAttackIds = filteredByPortAttacks.map(attack => attack.id);
   const areVisibleAttacksSelected = visibleAttackIds.length > 0
     && visibleAttackIds.every(id => selectedSessions.includes(id));
-
-  const parseDate = (dateString) => {
-    if (!dateString) return new Date(0);
-    let str = dateString;
-    if (!str.endsWith('Z') && !str.includes('+') && !str.includes('T')) {
-      str = str.replace(' ', 'T') + 'Z';
-    }
-    return new Date(str);
-  };
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -112,7 +115,7 @@ export default function Dashboard({
     setSortConfig({ key, direction });
   };
 
-  const sortedAttacks = [...filteredByPortAttacks].sort((a, b) => {
+  const sortedAttacks = useMemo(() => [...filteredByPortAttacks].sort((a, b) => {
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
 
@@ -127,29 +130,71 @@ export default function Dashboard({
     if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
     if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
-  });
+  }), [filteredByPortAttacks, sortConfig]);
 
-  const filteredCommands = commands.filter(cmd => {
-    const cmdDate = parseDate(cmd.timestamp);
-    return selectedSessions.some(sessionId => {
-      const currentAttack = filteredByPortAttacks.find(a => a.id === sessionId);
-      if (!currentAttack) return false;
-      if (cmd.ip_address !== currentAttack.ip_address) return false;
-      if ((cmd.port || 2222) !== (currentAttack.port || 2222)) return false;
+  const attacksById = useMemo(
+    () => new Map(filteredByPortAttacks.map(attack => [attack.id, attack])),
+    [filteredByPortAttacks]
+  );
 
-      const startDate = parseDate(currentAttack.timestamp);
-      const nextAttack = sortedAttacks.find(
-        a => a.ip_address === currentAttack.ip_address
-          && (a.port || 2222) === (currentAttack.port || 2222)
-          && parseDate(a.timestamp) > startDate
-      );
-      const endDate = nextAttack ? parseDate(nextAttack.timestamp) : new Date();
+  const nextAttackById = useMemo(() => {
+    const groups = new Map();
+    for (const attack of filteredByPortAttacks) {
+      const key = JSON.stringify([attack.ip_address, attack.port || 2222]);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(attack);
+    }
 
-      return cmdDate >= startDate && cmdDate < endDate;
-    });
-  });
+    const nextAttacks = new Map();
+    for (const group of groups.values()) {
+      group.sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp));
+      const timestamps = group.map(attack => parseDate(attack.timestamp).getTime());
+      let nextIndex = 1;
+      for (let index = 0; index < group.length; index += 1) {
+        while (nextIndex < group.length && timestamps[nextIndex] <= timestamps[index]) {
+          nextIndex += 1;
+        }
+        if (nextIndex < group.length) {
+          nextAttacks.set(group[index].id, group[nextIndex]);
+        }
+      }
+    }
+    return nextAttacks;
+  }, [filteredByPortAttacks]);
 
-  const sortedFilteredCommands = [...filteredCommands].sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp));
+  const sessionWindows = useMemo(() => {
+    const windowsBySession = new Map();
+    for (const sessionId of selectedSessions) {
+      const attack = attacksById.get(sessionId);
+      if (!attack) continue;
+      const key = JSON.stringify([attack.ip_address, attack.port || 2222]);
+      const nextAttack = nextAttackById.get(attack.id);
+      const window = {
+        start: parseDate(attack.timestamp).getTime(),
+        end: nextAttack ? parseDate(nextAttack.timestamp).getTime() : Number.POSITIVE_INFINITY
+      };
+      if (!windowsBySession.has(key)) windowsBySession.set(key, []);
+      windowsBySession.get(key).push(window);
+    }
+    return windowsBySession;
+  }, [attacksById, nextAttackById, selectedSessions]);
+
+  const sortedFilteredCommands = useMemo(() => commands
+    .filter(command => {
+      const key = JSON.stringify([command.ip_address, command.port || 2222]);
+      const windows = sessionWindows.get(key);
+      if (!windows) return false;
+      const commandTime = parseDate(command.timestamp).getTime();
+      return windows.some(window => commandTime >= window.start && commandTime < window.end);
+    })
+    .sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp)),
+  [commands, sessionWindows]);
+
+  const attackCountsByPort = useMemo(() => attacks.reduce((counts, attack) => {
+    const port = attack.port || 2222;
+    counts.set(port, (counts.get(port) || 0) + 1);
+    return counts;
+  }, new Map()), [attacks]);
 
   const getSortIndicator = (key) => {
     if (sortConfig.key !== key) return ' ↕';
@@ -218,7 +263,6 @@ export default function Dashboard({
                 sortedAttacks.map((att) => {
                   const sessionKey = att.id;
                   const isSelected = selectedSessions.includes(sessionKey);
-                  const [datePart, timePart] = att.timestamp ? att.timestamp.split(' ') : ['', ''];
                   const isBanned = bannedIps.includes(att.ip_address);
                   const isThisLoading = banLoadingIp === att.ip_address;
 
@@ -227,7 +271,7 @@ export default function Dashboard({
                       key={att.id}
                       className={`clickable-row ${isSelected ? 'row-selected' : ''}`}
                     >
-                      <td onClick={() => handleRowClick(sessionKey)}>{datePart} {timePart}</td>
+                      <td onClick={() => handleRowClick(sessionKey)}>{formatDate(att.timestamp)}</td>
                       <td onClick={() => handleRowClick(sessionKey)}><span style={{ backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px', color: '#38bdf8', fontWeight: 'bold' }}>{att.port || 2222}</span></td>
                       <td onClick={() => handleRowClick(sessionKey)}><span className="ip-link">{att.ip_address || 'Inconnue'}</span></td>
                       <td onClick={() => handleRowClick(sessionKey)}>{att.username}</td>
@@ -324,7 +368,7 @@ export default function Dashboard({
 
             {availablePorts.map((port) => {
               const isLive = (activeHoneypots || []).some(h => h.port === port);
-              const count = attacks.filter(a => (a.port || 2222) === port).length;
+              const count = attackCountsByPort.get(port) || 0;
               const isSelected = selectedPortFilter === String(port);
 
               return (
