@@ -1,14 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { countAttacksByPort, parseDate } from '../attackUtils';
 import './SessionReplay.css';
-
-function parseDate(dateString) {
-  if (!dateString) return new Date(0);
-  let str = dateString;
-  if (!str.endsWith('Z') && !str.includes('+') && !str.includes('T')) {
-    str = str.replace(' ', 'T') + 'Z';
-  }
-  return new Date(str);
-}
 
 export default function SessionReplay({ attacks, commands, activeHoneypots, formatDate }) {
   const [selectedReplaySession, setSelectedReplaySession] = useState('');
@@ -114,13 +106,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentReplayIndex]);
 
-  const activeTargetAttack = targetAttack;
-
-  const attackCountsByPort = useMemo(() => attacks.reduce((counts, attack) => {
-    const port = attack.port || 2222;
-    counts.set(port, (counts.get(port) || 0) + 1);
-    return counts;
-  }, new Map()), [attacks]);
+  const attackCountsByPort = useMemo(() => countAttacksByPort(attacks), [attacks]);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px' }}>
@@ -200,7 +186,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
             {/* Terminal interactif */}
             <div className="console replay-terminal">
               <div style={{ color: '#475569', fontSize: '0.80rem', marginBottom: '15px' }}>
-                [SYSTEM] Session sélectionnée sur le port {activeTargetAttack?.port || 2222} (IP: {activeTargetAttack?.ip_address}) - Connexion SSH simulée rétablie...
+                [SYSTEM] Session sélectionnée sur le port {targetAttack?.port || 2222} (IP: {targetAttack?.ip_address}) - Connexion SSH simulée rétablie...
               </div>
 
               {sessionCommands.length === 0 ? (

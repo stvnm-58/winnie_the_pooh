@@ -6,3 +6,4 @@ SERVER_DATA_DIR = os.path.abspath(
 )
 CONFIG_PATH = os.path.join(SERVER_DATA_DIR, 'config.json')
 BAN_STATE_PATH = os.path.join(SERVER_DATA_DIR, 'banned_ips.json')
+AUTH_CONFIG_PATH = os.path.join(SERVER_DATA_DIR, 'auth.json')

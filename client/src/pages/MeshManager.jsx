@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '../api';
 
 export default function MeshManager() {
   const [honeypots, setHoneypots] = useState([]);
@@ -16,7 +17,7 @@ export default function MeshManager() {
 
   const fetchHoneypots = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/honeypots');
+      const res = await apiFetch('/honeypots');
       if (res.ok) {
         const data = await res.json();
         setHoneypots(data.honeypots);
@@ -46,7 +47,7 @@ export default function MeshManager() {
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch('http://localhost:5000/api/honeypots', {
+      const res = await apiFetch('/honeypots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ port: portNum })
@@ -69,7 +70,7 @@ export default function MeshManager() {
     if (!window.confirm(`Voulez-vous vraiment stopper le faux SSH sur le port ${port} ?`)) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/honeypots/${port}`, {
+      const res = await apiFetch(`/honeypots/${port}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -98,7 +99,7 @@ export default function MeshManager() {
 
     setEditError('');
     try {
-      const portRes = await fetch('http://localhost:5000/api/port');
+      const portRes = await apiFetch('/port');
       const portData = await portRes.json();
       if (!portRes.ok) {
         setEditError(portData.error || "Impossible de vérifier le port principal.");
@@ -106,7 +107,7 @@ export default function MeshManager() {
       }
 
       if (portData.port === oldPort) {
-        const updateRes = await fetch('http://localhost:5000/api/port', {
+        const updateRes = await apiFetch('/port', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ port: targetPort })
@@ -123,7 +124,7 @@ export default function MeshManager() {
         return;
       }
 
-      const startRes = await fetch('http://localhost:5000/api/honeypots', {
+      const startRes = await apiFetch('/honeypots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ port: targetPort })
@@ -135,14 +136,14 @@ export default function MeshManager() {
         return;
       }
 
-      const stopRes = await fetch(`http://localhost:5000/api/honeypots/${oldPort}`, {
+      const stopRes = await apiFetch(`/honeypots/${oldPort}`, {
         method: 'DELETE'
       });
       if (!stopRes.ok) {
         const stopData = await stopRes.json();
         let rollbackMessage;
         try {
-          const rollbackRes = await fetch(`http://localhost:5000/api/honeypots/${targetPort}`, {
+          const rollbackRes = await apiFetch(`/honeypots/${targetPort}`, {
             method: 'DELETE'
           });
           const rollbackData = rollbackRes.ok ? null : await rollbackRes.json();

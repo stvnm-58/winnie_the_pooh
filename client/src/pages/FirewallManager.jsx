@@ -1,31 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { apiFetch } from '../api';
+import useBannedIps from '../hooks/useBannedIps';
 
 export default function FirewallManager() {
-  const [bannedIps, setBannedIps] = useState([]);
+  const { bannedIps, refreshBannedIps: fetchBannedIps } = useBannedIps();
   const [inputIp, setInputIp] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-
-  const fetchBannedIps = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/banned-ips');
-      if (res.ok) {
-        const data = await res.json();
-        setBannedIps(data.ips || []);
-      }
-    } catch (err) {
-      console.error("Erreur lors de la récupération des IP bannies :", err);
-    }
-  };
-
-  useEffect(() => {
-    const initialFetch = setTimeout(fetchBannedIps, 0);
-    const interval = setInterval(fetchBannedIps, 5000);
-    return () => {
-      clearTimeout(initialFetch);
-      clearInterval(interval);
-    };
-  }, []);
 
   const handleManualBan = async (e) => {
     e.preventDefault();
@@ -34,7 +15,7 @@ export default function FirewallManager() {
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch('http://localhost:5000/api/ban', {
+      const res = await apiFetch('/ban', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ip: inputIp.trim() })
@@ -55,7 +36,7 @@ export default function FirewallManager() {
 
   const handleUnban = async (ipAddress) => {
     try {
-      const res = await fetch('http://localhost:5000/api/unban', {
+      const res = await apiFetch('/unban', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ip: ipAddress })

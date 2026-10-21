@@ -1,18 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import SessionReplay from './pages/SessionReplay';
 import MeshManager from './pages/MeshManager';
 import FirewallManager from './pages/FirewallManager';
+import Login from './pages/Login';
+import { apiFetch } from './api';
 import './App.css';
 
-const API_BASE_URL = 'http://localhost:5000/api';
 const API_PAGE_SIZE = 500;
 
-async function fetchJson(url, signal) {
-  const response = await fetch(url, { signal });
+async function fetchJson(path, signal) {
+  const response = await apiFetch(path, { signal });
   if (!response.ok) {
-    throw new Error(`API ${response.status}: ${url}`);
+    throw new Error(`API ${response.status}: ${path}`);
   }
   return response.json();
 }
@@ -24,7 +25,7 @@ async function fetchAllRecords(endpoint, signal) {
   while (true) {
     const params = new URLSearchParams({ limit: String(API_PAGE_SIZE) });
     if (beforeId !== undefined) params.set('before_id', String(beforeId));
-    const page = await fetchJson(`${API_BASE_URL}/${endpoint}?${params}`, signal);
+    const page = await fetchJson(`/${endpoint}?${params}`, signal);
     records.push(...page);
 
     if (page.length < API_PAGE_SIZE) return records;
@@ -45,7 +46,7 @@ async function fetchNewRecords(endpoint, afterId, signal) {
       after_id: String(cursor),
       limit: String(API_PAGE_SIZE)
     });
-    const page = await fetchJson(`${API_BASE_URL}/${endpoint}?${params}`, signal);
+    const page = await fetchJson(`/${endpoint}?${params}`, signal);
     records.push(...page);
 
     if (page.length < API_PAGE_SIZE) return records.reverse();
@@ -70,17 +71,50 @@ function applyCountryUpdates(attacks, updates) {
 }
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+
   const [attacks, setAttacks] = useState([]);
   const [commands, setCommands] = useState([]);
   const [stats, setStats] = useState(null);
   const [activeHoneypots, setActiveHoneypots] = useState([]);
   const [selectedSessions, setSelectedSessions] = useState([]);
   const [currentTime, setCurrentTime] = useState(new Date());
+  
   const attacksCursor = useRef(0);
   const commandsCursor = useRef(0);
   const countryUpdatesCursor = useRef(0);
   const hasLoadedData = useRef(false);
   const lastStatsFetch = useRef(0);
+
+  const resetSessionData = useCallback(() => {
+    hasLoadedData.current = false;
+    attacksCursor.current = 0;
+    commandsCursor.current = 0;
+    countryUpdatesCursor.current = 0;
+    lastStatsFetch.current = 0;
+    setAttacks([]);
+    setCommands([]);
+    setStats(null);
+    setActiveHoneypots([]);
+    setSelectedSessions([]);
+  }, []);
+
+  const handleLoginSuccess = () => {
+    resetSessionData();
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await apiFetch('/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('Impossible de terminer la session côté serveur :', error);
+    } finally {
+      resetSessionData();
+      setIsAuthenticated(false);
+    }
+  }, [resetSessionData]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -88,6 +122,33 @@ function App() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    apiFetch('/session')
+      .then(response => {
+        if (response.status !== 401 && response.status !== 503 && !response.ok) {
+          throw new Error(`API ${response.status}: /session`);
+        }
+        return response.ok;
+      })
+      .catch(error => {
+        console.error('Impossible de vérifier la session :', error);
+        return false;
+      })
+      .then(authenticated => {
+        if (!cancelled) {
+          setIsAuthenticated(authenticated);
+          setIsCheckingSession(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return; // Ne pas fetch si non connecté
+
     const controller = new AbortController();
     let timer;
     let cancelled = false;
@@ -97,7 +158,7 @@ function App() {
         const isInitialLoad = !hasLoadedData.current;
         if (isInitialLoad) {
           const latestCountryUpdate = await fetchJson(
-            `${API_BASE_URL}/country-updates/latest`,
+            '/country-updates/latest',
             controller.signal
           );
           countryUpdatesCursor.current = latestCountryUpdate.id;
@@ -119,9 +180,9 @@ function App() {
           commandsRequest,
           countryUpdatesRequest,
           shouldRefreshStats
-            ? fetchJson(`${API_BASE_URL}/stats`, controller.signal)
+            ? fetchJson('/stats', controller.signal)
             : Promise.resolve(null),
-          fetchJson(`${API_BASE_URL}/honeypots`, controller.signal)
+          fetchJson('/honeypots', controller.signal)
         ]);
 
         if (cancelled) return;
@@ -160,6 +221,10 @@ function App() {
       } catch (err) {
         if (!cancelled && err.name !== 'AbortError') {
           console.error("Erreur de connexion API :", err);
+          // Si le token est expiré ou invalide (401), on déconnecte
+          if (err.message.includes('API 401:')) {
+            handleLogout();
+          }
         }
       } finally {
         if (!cancelled) timer = setTimeout(fetchData, 5000);
@@ -172,7 +237,19 @@ function App() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, []);
+  }, [isAuthenticated, handleLogout]);
+
+  if (isCheckingSession) return null;
+
+  if (!isAuthenticated) {
+    return (
+      <Router>
+        <Routes>
+          <Route path="*" element={<Login onLoginSuccess={handleLoginSuccess} />} />
+        </Routes>
+      </Router>
+    );
+  }
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -251,13 +328,32 @@ function App() {
             </nav>
           </div>
 
-          <div className="live-clock" style={{ backgroundColor: '#1e293b', padding: '10px 18px', borderRadius: '8px', fontFamily: 'monospace', textAlign: 'right', border: '1px solid #334155' }}>
-            <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#38bdf8' }}>
-              {currentTime.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris' })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div className="live-clock" style={{ backgroundColor: '#1e293b', padding: '10px 18px', borderRadius: '8px', fontFamily: 'monospace', textAlign: 'right', border: '1px solid #334155' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#38bdf8' }}>
+                {currentTime.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris' })}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8', textTransform: 'capitalize' }}>
+                {currentTime.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </div>
             </div>
-            <div style={{ fontSize: '0.8rem', color: '#94a3b8', textTransform: 'capitalize' }}>
-              {currentTime.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </div>
+
+            <button
+              onClick={handleLogout}
+              title="Se déconnecter"
+              style={{
+                backgroundColor: '#ef4444',
+                color: '#fff',
+                border: 'none',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              Déconnexion
+            </button>
           </div>
         </div>
 

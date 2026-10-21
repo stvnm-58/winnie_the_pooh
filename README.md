@@ -47,45 +47,46 @@ Quick Setup
      .\venv\Scripts\Activate.ps1
      ```
 
-2. Install dependencies:
+2. Install dependencies from the project root:
 
-   - If `requirements.txt` is at the project root:
-
-     ```bash
-     pip install -r requirements.txt
-     ```
-
-   - If dependencies are in the `requirements/` folder:
-
-     ```bash
-     pip install -r requirements/requirements.txt
-     ```
+   ```bash
+   python -m pip install -r server/requirements/requirements.txt
+   ```
 
 Configuration
 -------------
-- Expected database file: `data/honeypot.db` (configurable in `src/database.py`)
-- Environment variables you may use:
-  - `FLASK_ENV` / `APP_ENV` for the web app mode
-  - `DATABASE_URL` if you want to point to a different database
+- Expected database file: `server/data/honeypot.db`
+- On first launch, open the dashboard and create the administrator account on
+  the login screen. The account is created once and the dashboard logs you in
+  immediately. On later launches, enter the same ID and password. The password hash and signing key
+  are stored in `server/data/auth.json`; the password is never stored in clear
+  text. Subsequent launches go directly to the regular ID/password login.
+- Keep `server/data/auth.json` private and include it in backups: losing it
+  requires creating a new administrator account. It is excluded from Git.
+
+- `HONEYPOT_API_HOST` controls the Flask bind address and defaults to
+  `127.0.0.1`. Only bind to a public interface behind a secured deployment.
+- Set `HONEYPOT_COOKIE_SECURE=true` when TLS is terminated by a reverse proxy
+  and Flask does not see the original HTTPS connection.
+- `HONEYPOT_ALLOWED_ORIGINS` optionally overrides the comma-separated local
+  dashboard origin allowlist. Add only trusted dashboard origins.
+- `VITE_API_BASE_URL` optionally overrides the frontend API base URL; its local
+  default is `http://localhost:5000/api`.
 
 Usage
 -----
 - Start the SSH listener (example):
 
   ```bash
+  cd server
   python src/honeypot.py
   ```
 
 - Start the web dashboard (Flask example):
 
   ```bash
-  # from the project root
-  export FLASK_APP=src.web_app
-  flask run --host=0.0.0.0 --port=5000
-  ```
-
-  (On Windows PowerShell, replace `export` with the appropriate command or set the environment variable before running Flask.)
-
+  cd server
+  python -m flask --app src.web_app run --host=127.0.0.1 --port=5000 --no-debugger --no-reload
   ```
 
 Firewall Controls
@@ -114,6 +115,8 @@ Best Practices
 --------------
 - Do not commit `venv/` or `data/` (these should be in `.gitignore`)
 - Secure access to the dashboard and the database if you expose the application publicly
+- Captured SSH passwords are stored in clear text for honeypot analysis. Restrict
+  access to the data directory and its backups, and define a retention period.
 
 
 Contact

@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { apiFetch } from '../api';
+import { countAttacksByPort, parseDate } from '../attackUtils';
+import useBannedIps from '../hooks/useBannedIps';
 import './Dashboard.css';
-
-function parseDate(dateString) {
-  if (!dateString) return new Date(0);
-  let str = dateString;
-  if (!str.endsWith('Z') && !str.includes('+') && !str.includes('T')) {
-    str = str.replace(' ', 'T') + 'Z';
-  }
-  return new Date(str);
-}
 
 export default function Dashboard({ 
   attacks, 
@@ -21,8 +15,8 @@ export default function Dashboard({
   formatDate 
 }) {
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
-  const [bannedIps, setBannedIps] = useState([]);
   const [banLoadingIp, setBanLoadingIp] = useState(null);
+  const { bannedIps, refreshBannedIps: fetchBannedIps } = useBannedIps();
   
   // Persistance du dernier honeypot sélectionné dans le localStorage
   const [selectedPortFilter, setSelectedPortFilter] = useState(() => {
@@ -33,37 +27,15 @@ export default function Dashboard({
     localStorage.setItem('winnie_last_honeypot', selectedPortFilter);
   }, [selectedPortFilter]);
 
-  // Récupération de la liste des IP bannies pour les boutons du tableau
-  const fetchBannedIps = async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/banned-ips');
-      if (res.ok) {
-        const data = await res.json();
-        setBannedIps(data.ips || []);
-      }
-    } catch (err) {
-      console.error("Erreur lors de la récupération des IP bannies :", err);
-    }
-  };
-
-  useEffect(() => {
-    const initialFetch = setTimeout(fetchBannedIps, 0);
-    const interval = setInterval(fetchBannedIps, 5000);
-    return () => {
-      clearTimeout(initialFetch);
-      clearInterval(interval);
-    };
-  }, []);
-
   const handleToggleBan = async (ipAddress) => {
     if (!ipAddress || ipAddress === 'Inconnue' || ipAddress === 'N/A') return;
     
     const isBanned = bannedIps.includes(ipAddress);
-    const endpoint = isBanned ? 'http://localhost:5000/api/unban' : 'http://localhost:5000/api/ban';
+    const endpoint = isBanned ? '/unban' : '/ban';
     
     setBanLoadingIp(ipAddress);
     try {
-      const res = await fetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ip: ipAddress })
@@ -190,11 +162,7 @@ export default function Dashboard({
     .sort((a, b) => parseDate(a.timestamp) - parseDate(b.timestamp)),
   [commands, sessionWindows]);
 
-  const attackCountsByPort = useMemo(() => attacks.reduce((counts, attack) => {
-    const port = attack.port || 2222;
-    counts.set(port, (counts.get(port) || 0) + 1);
-    return counts;
-  }, new Map()), [attacks]);
+  const attackCountsByPort = useMemo(() => countAttacksByPort(attacks), [attacks]);
 
   const getSortIndicator = (key) => {
     if (sortConfig.key !== key) return ' ↕';

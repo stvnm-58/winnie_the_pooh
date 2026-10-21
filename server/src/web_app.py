@@ -1,4 +1,6 @@
-from flask import Flask, jsonify, request
+import jwt
+import datetime
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 import os
 import json
@@ -10,6 +12,8 @@ import socket
 import sys
 import tempfile
 import threading
+import secrets
+from werkzeug.security import check_password_hash, generate_password_hash
 from database import (
     get_all_attacks,
     get_all_commands,
@@ -17,11 +21,249 @@ from database import (
     get_latest_country_update_id,
     get_stats
 )
-from paths import BAN_STATE_PATH, CONFIG_PATH
+from paths import AUTH_CONFIG_PATH, BAN_STATE_PATH, CONFIG_PATH
 
 # --- INITIALISATION DE FLASK EN PREMIER ---
 app = Flask(__name__)
-CORS(app)  # Permet à ton front-end d'interroger l'API sans blocage CORS
+ALLOWED_ORIGINS = [
+    origin.strip().rstrip('/')
+    for origin in os.environ.get(
+        'HONEYPOT_ALLOWED_ORIGINS',
+        'http://localhost:5173,http://127.0.0.1:5173'
+    ).split(',')
+    if origin.strip()
+]
+JWT_SECRET_KEY = os.environ.get('HONEYPOT_JWT_SECRET', '')
+ADMIN_USERNAME = os.environ.get('HONEYPOT_ADMIN_USERNAME', '')
+ADMIN_PASSWORD_HASH = os.environ.get('HONEYPOT_ADMIN_PASSWORD_HASH', '')
+SESSION_TTL_SECONDS = 8 * 60 * 60
+COOKIE_SECURE = os.environ.get('HONEYPOT_COOKIE_SECURE', '').lower() in ('1', 'true', 'yes')
+
+CORS(
+    app,
+    resources={r'/api/*': {'origins': ALLOWED_ORIGINS}},
+    supports_credentials=True,
+    allow_headers=['Content-Type'],
+    methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+)
+
+
+def auth_configuration_is_valid():
+    return bool(get_auth_configuration())
+
+
+def get_auth_configuration():
+    if JWT_SECRET_KEY and ADMIN_USERNAME and ADMIN_PASSWORD_HASH:
+        return JWT_SECRET_KEY, ADMIN_USERNAME, ADMIN_PASSWORD_HASH
+
+    try:
+        with open(AUTH_CONFIG_PATH, 'r', encoding='utf-8') as auth_file:
+            configuration = json.load(auth_file)
+    except FileNotFoundError:
+        return None
+    except (OSError, json.JSONDecodeError) as error:
+        app.logger.error('Impossible de lire la configuration d’authentification: %s', error)
+        return None
+
+    if not isinstance(configuration, dict):
+        app.logger.error('Le fichier de configuration d’authentification est invalide.')
+        return None
+
+    secret = configuration.get('jwt_secret')
+    username = configuration.get('admin_username')
+    password_hash = configuration.get('admin_password_hash')
+    if (
+        not isinstance(secret, str)
+        or len(secret.encode('utf-8')) < 32
+        or not isinstance(username, str)
+        or not username
+        or not isinstance(password_hash, str)
+        or not password_hash
+    ):
+        app.logger.error('Le fichier de configuration d’authentification est incomplet.')
+        return None
+
+    return secret, username, password_hash
+
+
+@app.before_request
+def protect_api():
+    if not request.path.startswith('/api/') or request.method == 'OPTIONS':
+        return None
+
+    origin = request.headers.get('Origin')
+    if origin and origin.rstrip('/') not in ALLOWED_ORIGINS:
+        return jsonify({'error': 'Origine non autorisée'}), 403
+    if request.method not in ('GET', 'HEAD') and origin not in ALLOWED_ORIGINS:
+        return jsonify({'error': 'Origine requise ou non autorisée'}), 403
+
+    if request.endpoint in ('login', 'setup_authentication', 'auth_status'):
+        return None
+
+    auth_configuration = get_auth_configuration()
+    if not auth_configuration:
+        return jsonify({'error': 'Authentification non configurée sur le serveur'}), 503
+    secret, _, _ = auth_configuration
+
+    token = request.cookies.get('winnie_token')
+    if not token:
+        return jsonify({'error': 'Jeton d’authentification manquant'}), 401
+
+    try:
+        claims = jwt.decode(token, secret, algorithms=['HS256'])
+        if not isinstance(claims.get('user'), str) or not claims['user']:
+            raise jwt.InvalidTokenError('User claim is missing')
+        g.current_user = claims['user']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Session expirée, veuillez vous reconnecter'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Jeton invalide'}), 401
+
+    return None
+
+
+@app.route('/api/auth-status', methods=['GET'])
+def auth_status():
+    if auth_configuration_is_valid():
+        return jsonify({'setup_required': False})
+    if os.path.exists(AUTH_CONFIG_PATH):
+        return jsonify({
+            'error': 'Le fichier de configuration du compte administrateur est invalide'
+        }), 503
+    return jsonify({'setup_required': True})
+
+
+def create_session_response(username, secret, status=200):
+    token = jwt.encode({
+        'user': username,
+        'exp': datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(seconds=SESSION_TTL_SECONDS)
+    }, secret, algorithm='HS256')
+    response = jsonify({'username': username})
+    response.status_code = status
+    response.set_cookie(
+        'winnie_token',
+        token,
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        secure=request.is_secure or COOKIE_SECURE,
+        samesite='Lax',
+        path='/api'
+    )
+    return response
+
+
+@app.route('/api/setup', methods=['POST'])
+def setup_authentication():
+    if auth_configuration_is_valid():
+        return jsonify({'error': 'Le compte administrateur est déjà configuré'}), 409
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Corps de requête invalide'}), 400
+    username = data.get('username')
+    password = data.get('password')
+    if not isinstance(username, str) or not username.strip() or len(username.strip()) > 64:
+        return jsonify({'error': 'Identifiant requis (64 caractères maximum)'}), 400
+    if not isinstance(password, str) or len(password) < 12 or len(password) > 1024:
+        return jsonify({'error': 'Le mot de passe doit contenir entre 12 et 1024 caractères'}), 400
+    if len(ALLOWED_ORIGINS) == 0:
+        return jsonify({'error': 'Aucune origine autorisée n’est configurée'}), 503
+
+    configuration = {
+        'jwt_secret': secrets.token_urlsafe(48),
+        'admin_username': username.strip(),
+        'admin_password_hash': generate_password_hash(password)
+    }
+    try:
+        os.makedirs(os.path.dirname(AUTH_CONFIG_PATH), exist_ok=True)
+        file_descriptor = os.open(
+            AUTH_CONFIG_PATH,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600
+        )
+    except FileExistsError:
+        return jsonify({'error': 'Le compte administrateur est déjà configuré'}), 409
+    except OSError as error:
+        app.logger.error('Impossible de créer la configuration d’authentification: %s', error)
+        return jsonify({'error': 'Impossible d’enregistrer le compte administrateur'}), 500
+
+    try:
+        with os.fdopen(file_descriptor, 'w', encoding='utf-8') as auth_file:
+            json.dump(configuration, auth_file)
+        try:
+            os.chmod(AUTH_CONFIG_PATH, 0o600)
+        except OSError as error:
+            app.logger.error('Impossible de protéger le fichier d’authentification: %s', error)
+            os.unlink(AUTH_CONFIG_PATH)
+            return jsonify({'error': 'Impossible de protéger la configuration du compte'}), 500
+    except OSError as error:
+        app.logger.error('Impossible d’enregistrer la configuration d’authentification: %s', error)
+        try:
+            os.unlink(AUTH_CONFIG_PATH)
+        except OSError:
+            app.logger.exception('Impossible de nettoyer le fichier d’authentification incomplet')
+        return jsonify({'error': 'Impossible d’enregistrer le compte administrateur'}), 500
+
+    return create_session_response(
+        configuration['admin_username'],
+        configuration['jwt_secret'],
+        status=201
+    )
+
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Corps de requête invalide'}), 400
+    username = data.get('username')
+    password = data.get('password')
+
+    if (
+        not isinstance(username, str)
+        or not username
+        or not isinstance(password, str)
+        or not password
+    ):
+        return jsonify({'error': 'Identifiant et mot de passe requis'}), 400
+
+    auth_configuration = get_auth_configuration()
+    if not auth_configuration:
+        return jsonify({'error': 'Authentification non configurée sur le serveur'}), 503
+    secret, admin_username, password_hash = auth_configuration
+
+    try:
+        password_matches = username == admin_username and check_password_hash(
+            password_hash,
+            password
+        )
+    except (TypeError, ValueError) as error:
+        app.logger.error('Le hash de mot de passe administrateur est invalide: %s', error)
+        return jsonify({'error': 'Configuration du mot de passe invalide'}), 503
+
+    if password_matches:
+        return create_session_response(username, secret)
+
+    return jsonify({'error': 'Identifiants incorrects'}), 401
+
+
+@app.route('/api/session', methods=['GET'])
+def get_session():
+    return jsonify({'username': g.current_user})
+
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    response = jsonify({'success': True})
+    response.delete_cookie(
+        'winnie_token',
+        path='/api',
+        secure=request.is_secure or COOKIE_SECURE,
+        httponly=True,
+        samesite='Lax'
+    )
+    return response
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PORT_CHANGE_LOCK = threading.Lock()
@@ -490,4 +732,8 @@ def api_set_port():
 
 if __name__ == '__main__':
     print("[*] Démarrage de l'API Flask...")
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(
+        host=os.environ.get('HONEYPOT_API_HOST', '127.0.0.1'),
+        port=5000,
+        debug=False
+    )
