@@ -209,69 +209,72 @@ export default function Dashboard({
             )}
           </div>
 
-          <table>
-            <thead>
-              <tr>
-                <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Date & Heure{getSortIndicator('timestamp')}</th>
-                <th onClick={() => handleSort('port')} style={{ cursor: 'pointer' }}>Port Piégé{getSortIndicator('port')}</th>
-                <th onClick={() => handleSort('ip_address')} style={{ cursor: 'pointer' }}>IP Attaquante{getSortIndicator('ip_address')}</th>
-                <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>Utilisateur{getSortIndicator('username')}</th>
-                <th onClick={() => handleSort('password')} style={{ cursor: 'pointer' }}>Mot de passe{getSortIndicator('password')}</th>
-                <th>Actions Pare-feu</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedAttacks.length === 0 ? (
+          {/* Conteneur défilant pour limiter l'affichage vertical */}
+          <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid #1e293b', borderRadius: '6px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ position: 'sticky', top: 0, backgroundColor: '#0f172a', zIndex: 1 }}>
                 <tr>
-                  <td colSpan="6" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
-                    Aucune attaque enregistrée pour ce honeypot...
-                  </td>
+                  <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Date & Heure{getSortIndicator('timestamp')}</th>
+                  <th onClick={() => handleSort('port')} style={{ cursor: 'pointer' }}>Port Piégé{getSortIndicator('port')}</th>
+                  <th onClick={() => handleSort('ip_address')} style={{ cursor: 'pointer' }}>IP Attaquante{getSortIndicator('ip_address')}</th>
+                  <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>Utilisateur{getSortIndicator('username')}</th>
+                  <th onClick={() => handleSort('password')} style={{ cursor: 'pointer' }}>Mot de passe{getSortIndicator('password')}</th>
+                  <th>Actions Pare-feu</th>
                 </tr>
-              ) : (
-                sortedAttacks.map((att) => {
-                  const sessionKey = att.id;
-                  const isSelected = selectedSessions.includes(sessionKey);
-                  const isBanned = bannedIps.includes(att.ip_address);
-                  const isThisLoading = banLoadingIp === att.ip_address;
+              </thead>
+              <tbody>
+                {sortedAttacks.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
+                      Aucune attaque enregistrée pour ce honeypot...
+                    </td>
+                  </tr>
+                ) : (
+                  sortedAttacks.map((att) => {
+                    const sessionKey = att.id;
+                    const isSelected = selectedSessions.includes(sessionKey);
+                    const isBanned = bannedIps.includes(att.ip_address);
+                    const isThisLoading = banLoadingIp === att.ip_address;
 
-                  return (
-                    <tr 
-                      key={att.id}
-                      className={`clickable-row ${isSelected ? 'row-selected' : ''}`}
-                    >
-                      <td onClick={() => handleRowClick(sessionKey)}>{formatDate(att.timestamp)}</td>
-                      <td onClick={() => handleRowClick(sessionKey)}><span style={{ backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px', color: '#38bdf8', fontWeight: 'bold' }}>{att.port || 2222}</span></td>
-                      <td onClick={() => handleRowClick(sessionKey)}><span className="ip-link">{att.ip_address || 'Inconnue'}</span></td>
-                      <td onClick={() => handleRowClick(sessionKey)}>{att.username}</td>
-                      <td onClick={() => handleRowClick(sessionKey)}>{att.password}</td>
-                      <td>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleBan(att.ip_address);
-                          }}
-                          disabled={isThisLoading || !att.ip_address || att.ip_address === '127.0.0.1'}
-                          style={{
-                            backgroundColor: isBanned ? '#22c55e' : '#ef4444',
-                            color: '#fff',
-                            border: 'none',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.75rem',
-                            fontWeight: 'bold',
-                            opacity: isThisLoading ? 0.6 : 1
-                          }}
-                        >
-                          {isThisLoading ? '...' : (isBanned ? 'Débannir 🛡️' : 'Bannir 🚫')}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                    return (
+                      <tr 
+                        key={att.id}
+                        className={`clickable-row ${isSelected ? 'row-selected' : ''}`}
+                      >
+                        <td onClick={() => handleRowClick(sessionKey)}>{formatDate(att.timestamp)}</td>
+                        <td onClick={() => handleRowClick(sessionKey)}><span style={{ backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px', color: '#38bdf8', fontWeight: 'bold' }}>{att.port || 2222}</span></td>
+                        <td onClick={() => handleRowClick(sessionKey)}><span className="ip-link">{att.ip_address || 'Inconnue'}</span></td>
+                        <td onClick={() => handleRowClick(sessionKey)}>{att.username}</td>
+                        <td onClick={() => handleRowClick(sessionKey)}>{att.password}</td>
+                        <td>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleBan(att.ip_address);
+                            }}
+                            disabled={isThisLoading || !att.ip_address || att.ip_address === '127.0.0.1'}
+                            style={{
+                              backgroundColor: isBanned ? '#22c55e' : '#ef4444',
+                              color: '#fff',
+                              border: 'none',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '0.75rem',
+                              fontWeight: 'bold',
+                              opacity: isThisLoading ? 0.6 : 1
+                            }}
+                          >
+                            {isThisLoading ? '...' : (isBanned ? 'Débannir 🛡️' : 'Bannir 🚫')}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="card">
