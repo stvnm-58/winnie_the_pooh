@@ -72,8 +72,7 @@ Configuration
   dashboard origin allowlist. Add only trusted dashboard origins.
 - `VITE_API_BASE_URL` optionally overrides the frontend API base URL; its local
   default is `http://localhost:5000/api`.
-
-  [![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/stvnm-58/winnie_the_pooh?utm_source=readme&utm_medium=badge)
+  
 
 Usage
 -----
@@ -120,6 +119,7 @@ Best Practices
 - Captured SSH passwords are stored in clear text for honeypot analysis. Restrict
   access to the data directory and its backups, and define a retention period.
 
+![Architecture du projet](assets/diagram.png)
 
 Contact
 -------
