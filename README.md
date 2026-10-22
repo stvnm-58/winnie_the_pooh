@@ -23,6 +23,10 @@ Repository Structure
 - `templates/`: dashboard HTML templates
 - `requirements/` or `requirements.txt`: Python dependencies
 
+Diagram
+------------
+![Architecture du projet](client/src/assets/diagram.png)
+
 Requirements
 ------------
 - Python 3.8+ installed
@@ -118,8 +122,6 @@ Best Practices
 - Secure access to the dashboard and the database if you expose the application publicly
 - Captured SSH passwords are stored in clear text for honeypot analysis. Restrict
   access to the data directory and its backups, and define a retention period.
-
-![Architecture du projet](client/src/assets/diagram.png)
 
 Contact
 -------
