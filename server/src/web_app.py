@@ -1,6 +1,8 @@
 import jwt
 import datetime
 import random
+import time
+from collections import defaultdict
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 import os
@@ -90,6 +92,10 @@ def get_auth_configuration():
 @app.before_request
 def protect_api():
     if not request.path.startswith('/api/') or request.method == 'OPTIONS':
+        return None
+
+    # Exception pour permettre aux honeypots locaux de reporter des attaques sans authentification JWT front-end si besoin
+    if request.path == '/api/report-attempt':
         return None
 
     origin = request.headers.get('Origin')
@@ -271,6 +277,12 @@ PORT_CHANGE_LOCK = threading.Lock()
 BAN_LOCK = threading.Lock()
 HONEYPOT_LOCK = threading.Lock()
 MAX_API_PAGE_SIZE = 500
+
+# --- STRUCTURES POUR L'AUTO-BAN (RATE LIMITING & STATS) ---
+ATTEMPT_HISTORY = defaultdict(list)
+AUTO_BAN_STATS = {}  # Stocke le nombre de tentatives au moment du ban automatique : { "IP": count }
+RATE_LIMIT_WINDOW = 15     # Fenêtre de temps en secondes (15s)
+RATE_LIMIT_MAX_ATTEMPTS = 15 # Nombre max de tentatives avant auto-ban (15 tentatives)
 
 def get_current_port():
     try:
@@ -585,7 +597,7 @@ def api_stop_honeypot(port):
 
     return jsonify({"success": True, "message": f"Faux SSH sur le port {port} arrêté avec succès."})
 
-# --- FONCTIONS DE DÉFENSE ACTIVE (FIREWALL : BAN / UNBAN) ---
+# --- FONCTIONS DE DÉFENSE ACTIVE (FIREWALL : BAN / UNBAN / AUTO-BAN) ---
 def run_firewall_command(command, check=True):
     if os.name != 'nt' and os.geteuid() != 0:
         command = ['sudo', '-n', *command]
@@ -733,6 +745,8 @@ def api_unban_ip():
         with BAN_LOCK:
             unban_ip_system(target_ip)
             save_banned_ips([ip for ip in load_banned_ips() if ip != target_ip])
+            if target_ip in AUTO_BAN_STATS:
+                del AUTO_BAN_STATS[target_ip]
     except RuntimeError as error:
         return jsonify({"error": f"Échec du débannissement de l'IP {target_ip} : {error}"}), 500
 
@@ -744,6 +758,68 @@ def api_banned_ips():
         return jsonify({"ips": load_banned_ips()})
     except RuntimeError as error:
         return jsonify({"error": str(error)}), 500
+
+@app.route('/api/autoban-stats', methods=['GET'])
+def api_autoban_stats():
+    """Renvoie les statistiques des IP bannies automatiquement avec leur nombre de tentatives."""
+    with BAN_LOCK:
+        return jsonify({"autoban_stats": AUTO_BAN_STATS})
+
+@app.route('/api/attempt-stats', methods=['GET'])
+def api_attempt_stats():
+    """Renvoie les tentatives en cours de suivi (rate-limiting) pour chaque IP."""
+    now = time.time()
+    with BAN_LOCK:
+        active_attempts = {}
+        for ip, timestamps in ATTEMPT_HISTORY.items():
+            valid_ts = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW]
+            if valid_ts:
+                active_attempts[ip] = len(valid_ts)
+        return jsonify({"active_attempts": active_attempts})
+
+@app.route('/api/report-attempt', methods=['POST'])
+def api_report_attempt():
+    """Reçoit un signal de tentative de connexion d'un honeypot pour analyser le flood / DDoS."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('ip'), str):
+        return jsonify({"error": "IP manquante."}), 400
+
+    try:
+        parsed_ip = ipaddress.ip_address(data['ip'].strip())
+        if parsed_ip.is_loopback:
+            return jsonify({"success": True, "ignored": "loopback"})
+        target_ip = str(parsed_ip)
+    except ValueError:
+        return jsonify({"error": "IP invalide."}), 400
+
+    now = time.time()
+    with BAN_LOCK:
+        banned_ips = load_banned_ips()
+        if target_ip in banned_ips:
+            return jsonify({"success": True, "status": "already_banned"})
+
+        timestamps = ATTEMPT_HISTORY[target_ip]
+        timestamps = [t for t in timestamps if now - t < RATE_LIMIT_WINDOW]
+        timestamps.append(now)
+        ATTEMPT_HISTORY[target_ip] = timestamps
+        current_attempts = len(timestamps)
+
+        if current_attempts >= RATE_LIMIT_MAX_ATTEMPTS:
+            try:
+                ban_ip_system(target_ip)
+                if target_ip not in banned_ips:
+                    banned_ips.append(target_ip)
+                    save_banned_ips(banned_ips)
+                
+                AUTO_BAN_STATS[target_ip] = current_attempts
+                print(f"[!] AUTO-BAN DÉCLENCHÉ : IP {target_ip} bloquée ({current_attempts} tentatives en {RATE_LIMIT_WINDOW}s).")
+                return jsonify({"success": True, "auto_banned": True, "attempts": current_attempts})
+            except Exception as error:
+                print(f"[-] Erreur lors de l'auto-ban de {target_ip} : {error}")
+                return jsonify({"error": str(error)}), 500
+
+    return jsonify({"success": True, "auto_banned": False, "attempts": current_attempts})
+
 # -----------------------------------------------------------
 
 @app.route('/api/attacks', methods=['GET'])
