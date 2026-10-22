@@ -8,12 +8,18 @@ export default function MeshManager() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // États pour le déploiement en essaim (Swarm aléatoire)
+  // États pour le déploiement en essaim (Swarm aléatoire) - Limité à 10 max
   const [swarmCount, setSwarmCount] = useState('3');
   const [swarmMin, setSwarmMin] = useState('3000');
   const [swarmMax, setSwarmMax] = useState('3010');
   const [swarmLoading, setSwarmLoading] = useState(false);
   const [swarmErrorMsg, setSwarmErrorMsg] = useState('');
+
+  // États pour le déploiement basé sur un port de référence - Limité à 10 max
+  const [refCount, setRefCount] = useState('3');
+  const [refPort, setRefPort] = useState('3306');
+  const [refLoading, setRefLoading] = useState(false);
+  const [refErrorMsg, setRefErrorMsg] = useState('');
   
   // États pour gérer l'édition du port par carte (clé = ancien port)
   const [editingPort, setEditingPort] = useState(null);
@@ -79,8 +85,8 @@ export default function MeshManager() {
     const port_min = Number(swarmMin);
     const port_max = Number(swarmMax);
 
-    if (!Number.isInteger(count) || count < 1 || count > 100) {
-      setSwarmErrorMsg('Le nombre de honeypots doit être entre 1 et 100.');
+    if (!Number.isInteger(count) || count < 1 || count > 10) {
+      setSwarmErrorMsg('Le nombre de honeypots doit être entre 1 et 10.');
       return;
     }
     if (!Number.isInteger(port_min) || !Number.isInteger(port_max) || port_min > port_max || port_min < 1 || port_max > 65535) {
@@ -109,6 +115,41 @@ export default function MeshManager() {
     }
   };
 
+  const handleDeployReference = async (e) => {
+    e.preventDefault();
+    const count = Number(refCount);
+    const reference_port = Number(refPort);
+
+    if (!Number.isInteger(count) || count < 1 || count > 10) {
+      setRefErrorMsg('Le nombre de honeypots doit être entre 1 et 10.');
+      return;
+    }
+    if (!Number.isInteger(reference_port) || reference_port < 1 || reference_port > 65535) {
+      setRefErrorMsg('Port de service invalide (1-65535).');
+      return;
+    }
+
+    setRefLoading(true);
+    setRefErrorMsg('');
+    try {
+      const res = await apiFetch('/honeypots/swarm-reference', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count, reference_port })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchHoneypots();
+      } else {
+        setRefErrorMsg(data.error || 'Erreur lors du déploiement autour du service.');
+      }
+    } catch {
+      setRefErrorMsg("Impossible de joindre l'API Flask.");
+    } finally {
+      setRefLoading(false);
+    }
+  };
+
   const handleStop = async (port) => {
     if (!window.confirm(`Voulez-vous vraiment stopper le faux SSH sur le port ${port} ?`)) return;
 
@@ -127,7 +168,6 @@ export default function MeshManager() {
     }
   };
 
-  // Logique pour modifier le port d'un honeypot actif à la volée
   const handleUpdatePort = async (oldPort) => {
     const targetPort = Number(newPortInput);
     if (!Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65535) {
@@ -251,13 +291,13 @@ export default function MeshManager() {
       </form>
 
       {/* Déploiement en essaim (Swarm aléatoire) */}
-      <form onSubmit={handleDeploySwarm} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '25px', flexWrap: 'wrap', backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
+      <form onSubmit={handleDeploySwarm} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
         <span style={{ fontSize: '0.9rem', color: '#38bdf8', fontWeight: 'bold' }}>Essaim aléatoire :</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nombre de Honeypots :</label>
+          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nombre de Honeypots (max 10) :</label>
           <input 
             type="number" 
-            min="1" max="100"
+            min="1" max="10"
             value={swarmCount} 
             onChange={(e) => setSwarmCount(e.target.value)}
             style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '70px' }}
@@ -291,6 +331,39 @@ export default function MeshManager() {
           {swarmLoading ? 'Génération...' : 'Générer'}
         </button>
         {swarmErrorMsg && <span style={{ color: '#fca5a5', fontSize: '0.85rem', width: '100%' }}>{swarmErrorMsg}</span>}
+      </form>
+
+      {/* Déploiement autour d'un port de référence */}
+      <form onSubmit={handleDeployReference} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '25px', flexWrap: 'wrap', backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
+        <span style={{ fontSize: '0.9rem', color: '#a855f7', fontWeight: 'bold' }}>Essaim autour d'un service :</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nombre de Honeypots (max 10) :</label>
+          <input 
+            type="number" 
+            min="1" max="10"
+            value={refCount} 
+            onChange={(e) => setRefCount(e.target.value)}
+            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '70px' }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Port de référence :</label>
+          <input 
+            type="number" 
+            min="1" max="65535"
+            value={refPort} 
+            onChange={(e) => setRefPort(e.target.value)}
+            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '90px' }}
+          />
+        </div>
+        <button 
+          type="submit" 
+          disabled={refLoading}
+          style={{ backgroundColor: '#8b5cf6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          {refLoading ? 'Génération...' : 'Générer'}
+        </button>
+        {refErrorMsg && <span style={{ color: '#fca5a5', fontSize: '0.85rem', width: '100%' }}>{refErrorMsg}</span>}
       </form>
 
       <h4>Instances de Honeypots Actives ({honeypots.length})</h4>

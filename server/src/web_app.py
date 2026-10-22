@@ -448,8 +448,8 @@ def api_start_swarm():
     except (TypeError, ValueError):
         return jsonify({"error": "Les paramètres 'count', 'port_min' et 'port_max' doivent être des nombres entiers."}), 400
 
-    if not (1 <= count <= 100):
-        return jsonify({"error": "Le nombre de honeypots (count) doit être compris entre 1 et 100."}), 400
+    if not (1 <= count <= 10):
+        return jsonify({"error": "Le nombre de honeypots doit être compris entre 1 et 10."}), 400
     if not (1 <= port_min <= 65535 and 1 <= port_max <= 65535 and port_min <= port_max):
         return jsonify({"error": "La plage de ports est invalide (1-65535)."}), 400
 
@@ -489,6 +489,81 @@ def api_start_swarm():
         "deployed": deployed_instances,
         "errors": errors,
         "message": f"{len(deployed_instances)} faux SSH déployés en essaim avec succès."
+    })
+
+@app.route('/api/honeypots/swarm-reference', methods=['POST'])
+def api_start_swarm_reference():
+    """Déploie X honeypots autour d'un port de référence (sans toucher au port de service)."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Corps de requête invalide."}), 400
+    
+    count_val = data.get('count')
+    ref_val = data.get('reference_port')
+
+    try:
+        count = int(count_val)
+        ref_port = int(ref_val)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Les paramètres 'count' et 'reference_port' doivent être des nombres entiers."}), 400
+
+    if not (1 <= count <= 10):
+        return jsonify({"error": "Le nombre de honeypots doit être compris entre 1 et 10."}), 400
+    if not (1 <= ref_port <= 65535):
+        return jsonify({"error": "Le port de référence doit être compris entre 1 et 65535."}), 400
+
+    honeypot_script = os.path.join(BASE_DIR, 'honeypot.py')
+    
+    with HONEYPOT_LOCK:
+        active_ports = {instance['port'] for instance in find_all_honeypot_instances()}
+        
+        candidate_ports = []
+        offset = 1
+        while len(candidate_ports) < (count * 3):
+            p_up = ref_port + offset
+            p_down = ref_port - offset
+            if p_up <= 65535 and p_up != ref_port:
+                candidate_ports.append(p_up)
+            if p_down >= 1 and p_down != ref_port:
+                candidate_ports.append(p_down)
+            if p_up > 65535 and p_down < 1:
+                break
+            offset += 1
+
+        available_ports = []
+        for p in candidate_ports:
+            if len(available_ports) >= count:
+                break
+            if p in active_ports:
+                continue
+            
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                    probe.bind(("0.0.0.0", p))
+                available_ports.append(p)
+            except OSError:
+                continue
+
+        if len(available_ports) < count:
+            return jsonify({
+                "error": f"Impossible de trouver {count} ports libres autour du service {ref_port}. Seulement {len(available_ports)} disponibles."
+            }), 409
+
+        deployed_instances = []
+        errors = []
+
+        for p in available_ports:
+            try:
+                process = start_honeypot(honeypot_script, port=p, archive=False)
+                deployed_instances.append({"port": p, "pid": process.pid})
+            except (OSError, RuntimeError) as error:
+                errors.append(f"Port {p}: {str(error)}")
+
+    return jsonify({
+        "success": True,
+        "deployed": deployed_instances,
+        "errors": errors,
+        "message": f"{len(deployed_instances)} honeypots déployés autour du service sur le port {ref_port} avec succès."
     })
 
 @app.route('/api/honeypots/<int:port>', methods=['DELETE'])
