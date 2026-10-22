@@ -119,7 +119,7 @@ Best Practices
 - Captured SSH passwords are stored in clear text for honeypot analysis. Restrict
   access to the data directory and its backups, and define a retention period.
 
-![Architecture du projet](assets/diagram.png)
+![Architecture du projet](client/src/assets/diagram.png)
 
 Contact
 -------
