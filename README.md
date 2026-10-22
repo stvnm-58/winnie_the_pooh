@@ -1,4 +1,4 @@
-# Winnie the Pooh — My Honeypot
+# Honeypot Swarp -- Honeypots controller
 
 Description
 -----------
