@@ -369,7 +369,7 @@ export default function MeshManager() {
       <h4>Instances de Honeypots Actives ({honeypots.length})</h4>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px', marginTop: '15px' }}>
         {honeypots.length === 0 ? (
-          <p className="muted">Aucun honeypot secondaire actif pour le moment.</p>
+          <p className="muted">Aucun honeypot actif pour le moment.</p>
         ) : (
           honeypots.map((h) => (
             <div key={h.pid} style={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '15px', display: 'flex', flexDirection: 'column', gap: '12px' }}>

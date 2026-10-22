@@ -10,6 +10,10 @@ export default function FirewallManager() {
   const [autoBanStats, setAutoBanStats] = useState({});
   const [activeAttempts, setActiveAttempts] = useState({});
 
+  // États pour la configuration dynamique de l'auto-ban
+  const [autoBanConfig, setAutoBanConfig] = useState({ enabled: true, window: 15, max_attempts: 15 });
+  const [configLoading, setConfigLoading] = useState(false);
+
   const fetchFirewallData = async () => {
     try {
       const resStats = await apiFetch('/autoban-stats');
@@ -22,6 +26,12 @@ export default function FirewallManager() {
       if (resAttempts.ok) {
         const data = await resAttempts.json();
         setActiveAttempts(data.active_attempts || {});
+      }
+
+      const resConfig = await apiFetch('/autoban-config');
+      if (resConfig.ok) {
+        const data = await resConfig.json();
+        setAutoBanConfig(data);
       }
     } catch (err) {
       console.error("Erreur lors de la récupération des données du pare-feu :", err);
@@ -36,6 +46,25 @@ export default function FirewallManager() {
       clearInterval(interval);
     };
   }, []);
+
+  const handleUpdateConfig = async (newFields) => {
+    setConfigLoading(true);
+    try {
+      const res = await apiFetch('/autoban-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...autoBanConfig, ...newFields })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAutoBanConfig(data);
+      }
+    } catch (err) {
+      console.error("Erreur lors de la mise à jour de la configuration :", err);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
 
   const handleManualBan = async (e) => {
     e.preventDefault();
@@ -89,13 +118,53 @@ export default function FirewallManager() {
         <h3>🛡️ Gestion du Pare-feu (IPs Bloquées & Surveillance)</h3>
       </div>
       <p className="muted" style={{ marginBottom: '20px' }}>
-        Visualisez et gérez l'ensemble des adresses IP bloquées au niveau système et suivez les tentatives suspectes en temps réel (seuil d'auto-ban : 15 essais en 15s).
+        Visualisez et gérez l'ensemble des adresses IP bloquées au niveau système et configurez les règles d'auto-défense en temps réel.
       </p>
 
-      {/* Encadré de surveillance en temps réel des attaques en cours */}
+      {/* Panneau de configuration dynamique de l'Auto-Ban */}
+      <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '15px', marginBottom: '25px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '0.9rem', color: '#f8fafc', fontWeight: 'bold' }}>Auto-Ban (Anti-Flood) :</span>
+          <button 
+            onClick={() => handleUpdateConfig({ enabled: !autoBanConfig.enabled })}
+            disabled={configLoading}
+            style={{ backgroundColor: autoBanConfig.enabled ? '#22c55e' : '#64748b', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+          >
+            {autoBanConfig.enabled ? 'Activé ✓' : 'Désactivé ✕'}
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Essais max :</label>
+          <input 
+            type="number" 
+            min="1" max="100"
+            value={autoBanConfig.max_attempts}
+            onChange={(e) => setAutoBanConfig({ ...autoBanConfig, max_attempts: e.target.value })}
+            onBlur={(e) => handleUpdateConfig({ max_attempts: Number(e.target.value) })}
+            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '4px 8px', borderRadius: '4px', width: '60px', textAlign: 'center' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Fenêtre (secondes) :</label>
+          <input 
+            type="number" 
+            min="1" max="300"
+            value={autoBanConfig.window}
+            onChange={(e) => setAutoBanConfig({ ...autoBanConfig, window: e.target.value })}
+            onBlur={(e) => handleUpdateConfig({ window: Number(e.target.value) })}
+            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '4px 8px', borderRadius: '4px', width: '60px', textAlign: 'center' }}
+          />
+        </div>
+      </div>
+
+      {/* Encadré de surveillance en temps réel */}
       <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '15px', marginBottom: '25px' }}>
         <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#38bdf8' }}>⚡ Surveillance du trafic suspect (Rate-limiting en cours)</h4>
-        {Object.keys(activeAttempts).length === 0 ? (
+        {!autoBanConfig.enabled ? (
+          <p className="muted" style={{ margin: 0, fontSize: '0.85rem', color: '#fca5a5' }}>L'auto-ban est actuellement désactivé.</p>
+        ) : Object.keys(activeAttempts).length === 0 ? (
           <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Aucune tentative rapprochée détectée pour le moment.</p>
         ) : (
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -103,7 +172,7 @@ export default function FirewallManager() {
               <div key={idx} style={{ backgroundColor: '#0f172a', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontFamily: 'monospace', color: '#f87171', fontWeight: 'bold' }}>{ip}</span>
                 <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem' }}>
-                  {count} / 15 essais
+                  {count} / {autoBanConfig.max_attempts} essais
                 </span>
               </div>
             ))}

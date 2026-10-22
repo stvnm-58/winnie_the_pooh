@@ -281,6 +281,7 @@ MAX_API_PAGE_SIZE = 500
 # --- STRUCTURES POUR L'AUTO-BAN (RATE LIMITING & STATS) ---
 ATTEMPT_HISTORY = defaultdict(list)
 AUTO_BAN_STATS = {}  # Stocke le nombre de tentatives au moment du ban automatique : { "IP": count }
+AUTO_BAN_ENABLED = True
 RATE_LIMIT_WINDOW = 15     # Fenêtre de temps en secondes (15s)
 RATE_LIMIT_MAX_ATTEMPTS = 15 # Nombre max de tentatives avant auto-ban (15 tentatives)
 
@@ -765,6 +766,46 @@ def api_autoban_stats():
     with BAN_LOCK:
         return jsonify({"autoban_stats": AUTO_BAN_STATS})
 
+@app.route('/api/autoban-config', methods=['GET', 'POST'])
+def api_autoban_config():
+    """Permet de récupérer ou de modifier à la volée la configuration de l'auto-ban."""
+    global AUTO_BAN_ENABLED, RATE_LIMIT_WINDOW, RATE_LIMIT_MAX_ATTEMPTS
+    if request.method == 'GET':
+        return jsonify({
+            "enabled": AUTO_BAN_ENABLED,
+            "window": RATE_LIMIT_WINDOW,
+            "max_attempts": RATE_LIMIT_MAX_ATTEMPTS
+        })
+    
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Corps de requête invalide."}), 400
+
+    with BAN_LOCK:
+        if 'enabled' in data:
+            AUTO_BAN_ENABLED = bool(data['enabled'])
+        if 'window' in data:
+            try:
+                val = int(data['window'])
+                if 1 <= val <= 300:
+                    RATE_LIMIT_WINDOW = val
+            except (ValueError, TypeError):
+                pass
+        if 'max_attempts' in data:
+            try:
+                val = int(data['max_attempts'])
+                if 1 <= val <= 100:
+                    RATE_LIMIT_MAX_ATTEMPTS = val
+            except (ValueError, TypeError):
+                pass
+
+    return jsonify({
+        "success": True,
+        "enabled": AUTO_BAN_ENABLED,
+        "window": RATE_LIMIT_WINDOW,
+        "max_attempts": RATE_LIMIT_MAX_ATTEMPTS
+    })
+
 @app.route('/api/attempt-stats', methods=['GET'])
 def api_attempt_stats():
     """Renvoie les tentatives en cours de suivi (rate-limiting) pour chaque IP."""
@@ -804,7 +845,7 @@ def api_report_attempt():
         ATTEMPT_HISTORY[target_ip] = timestamps
         current_attempts = len(timestamps)
 
-        if current_attempts >= RATE_LIMIT_MAX_ATTEMPTS:
+        if AUTO_BAN_ENABLED and current_attempts >= RATE_LIMIT_MAX_ATTEMPTS:
             try:
                 ban_ip_system(target_ip)
                 if target_ip not in banned_ips:
