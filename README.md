@@ -1,4 +1,4 @@
-# Honeypot Swarp -- Honeypots controller
+# Honeypot Swarm -- Honeypots controller
 
 Description
 -----------
