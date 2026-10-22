@@ -1,5 +1,6 @@
 import jwt
 import datetime
+import random
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 import os
@@ -427,6 +428,67 @@ def api_start_honeypot():
         "message": f"Faux SSH déployé avec succès sur le port {port}.",
         "pid": process.pid,
         "port": port
+    })
+
+@app.route('/api/honeypots/swarm', methods=['POST'])
+def api_start_swarm():
+    """Déploie X honeypots sur des ports aléatoires compris entre port_min et port_max."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Corps de requête invalide."}), 400
+    
+    count_val = data.get('count')
+    min_val = data.get('port_min')
+    max_val = data.get('port_max')
+
+    try:
+        count = int(count_val)
+        port_min = int(min_val)
+        port_max = int(max_val)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Les paramètres 'count', 'port_min' et 'port_max' doivent être des nombres entiers."}), 400
+
+    if not (1 <= count <= 100):
+        return jsonify({"error": "Le nombre de honeypots (count) doit être compris entre 1 et 100."}), 400
+    if not (1 <= port_min <= 65535 and 1 <= port_max <= 65535 and port_min <= port_max):
+        return jsonify({"error": "La plage de ports est invalide (1-65535)."}), 400
+
+    honeypot_script = os.path.join(BASE_DIR, 'honeypot.py')
+    
+    with HONEYPOT_LOCK:
+        active_ports = {instance['port'] for instance in find_all_honeypot_instances()}
+        
+        available_ports = []
+        for p in range(port_min, port_max + 1):
+            if p not in active_ports:
+                try:
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                        probe.bind(("0.0.0.0", p))
+                    available_ports.append(p)
+                except OSError:
+                    continue
+
+        if len(available_ports) < count:
+            return jsonify({
+                "error": f"Capacité insuffisante : Seulement {len(available_ports)} ports disponibles trouvés dans la plage [{port_min}, {port_max}] pour {count} demandés."
+            }), 409
+
+        selected_ports = random.sample(available_ports, count)
+        deployed_instances = []
+        errors = []
+
+        for p in selected_ports:
+            try:
+                process = start_honeypot(honeypot_script, port=p, archive=False)
+                deployed_instances.append({"port": p, "pid": process.pid})
+            except (OSError, RuntimeError) as error:
+                errors.append(f"Port {p}: {str(error)}")
+
+    return jsonify({
+        "success": True,
+        "deployed": deployed_instances,
+        "errors": errors,
+        "message": f"{len(deployed_instances)} faux SSH déployés en essaim avec succès."
     })
 
 @app.route('/api/honeypots/<int:port>', methods=['DELETE'])

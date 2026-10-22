@@ -233,7 +233,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
       {/* COLONNE DROITE : PANNEAU LATÉRAL DE SÉLECTION DU HONEYPOT */}
       <div>
         <div className="card" style={{ position: 'sticky', top: '20px' }}>
-          <h3 style={{ marginBottom: '15px' }}>🕸️ Deception Mesh</h3>
+          <h3 style={{ marginBottom: '15px' }}>Swarm</h3>
           <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '15px' }}>
             Sélectionnez une instance pour filtrer les replays :
           </p>

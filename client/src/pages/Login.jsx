@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
+import logo from '../assets/HoneypotSwarm.png';
 
 export default function Login({ onLoginSuccess }) {
   const [username, setUsername] = useState('');
@@ -72,11 +73,20 @@ export default function Login({ onLoginSuccess }) {
         boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '25px' }}>
-          <h2 style={{ color: '#f8fafc', margin: '0 0 8px 0', fontSize: '1.5rem' }}>🍯 Winnie the Pooh</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '8px' }}>
+            <img 
+              src={logo} 
+              alt="Honeypot Swarm Logo" 
+              style={{ width: '42px', height: '42px', objectFit: 'contain' }} 
+            />
+            <h2 style={{ color: '#f8fafc', margin: 0, fontSize: '1.6rem', fontWeight: 'bold' }}>
+              Honeypot Swarm
+            </h2>
+          </div>
           <p style={{ color: '#94a3b8', margin: 0, fontSize: '0.85rem' }}>
             {setupRequired
               ? 'Crée ton compte administrateur'
-              : 'Deception Mesh Control Center'}
+              : 'Honeypots controller'}
           </p>
         </div>
 

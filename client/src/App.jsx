@@ -6,6 +6,7 @@ import MeshManager from './pages/MeshManager';
 import FirewallManager from './pages/FirewallManager';
 import Login from './pages/Login';
 import { apiFetch } from './api';
+import logo from './assets/HoneypotSwarm.png';
 import './App.css';
 
 const API_PAGE_SIZE = 500;
@@ -147,7 +148,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) return; // Ne pas fetch si non connecté
+    if (!isAuthenticated) return;
 
     const controller = new AbortController();
     let timer;
@@ -221,7 +222,6 @@ function App() {
       } catch (err) {
         if (!cancelled && err.name !== 'AbortError') {
           console.error("Erreur de connexion API :", err);
-          // Si le token est expiré ou invalide (401), on déconnecte
           if (err.message.includes('API 401:')) {
             handleLogout();
           }
@@ -306,7 +306,16 @@ function App() {
       <div className="container">
         <div className="top-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '15px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-            <h1 style={{ margin: 0 }}>Winnie The Pooh Dashboard</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <img 
+                src={logo} 
+                alt="Honeypot Swarm Logo" 
+                style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+              />
+              <h1 style={{ margin: 0, fontSize: '1.8rem', color: '#f8fafc', fontWeight: 'bold' }}>
+                Honeypot Swarm Dashboard
+              </h1>
+            </div>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#1e293b', padding: '6px 12px', borderRadius: '20px', border: '1px solid #334155' }}>
               <span style={{
@@ -322,7 +331,7 @@ function App() {
 
             <nav style={{ display: 'flex', backgroundColor: '#1e293b', padding: '4px', borderRadius: '8px', border: '1px solid #334155', gap: '5px' }}>
               <NavLink to="/" style={navLinkStyle}>Tableau de bord</NavLink>
-              <NavLink to="/mesh" style={navLinkStyle}>Mesh Armada 🕸️</NavLink>
+              <NavLink to="/mesh" style={navLinkStyle}>Swarm Controller</NavLink>
               <NavLink to="/replay" style={navLinkStyle}>Replay</NavLink>
               <NavLink to="/firewall" style={navLinkStyle}>Pare-feu 🛡️</NavLink>
             </nav>

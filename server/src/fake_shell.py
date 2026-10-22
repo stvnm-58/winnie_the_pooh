@@ -9,18 +9,37 @@ def handle_fake_shell(channel, client_ip, port=2222):
     try:
         channel.settimeout(300)
         virtual_fs = {
-            "/root": ["config.json", "backups.zip", "root.txt", ".ssh"],
-            "/root/.ssh": ["authorized_keys", "id_rsa"],
-            "/var/log": ["auth.log", "syslog", "nginx"],
-            "/var/www/html": ["index.html", "admin.php", "config.php"],
-            "/tmp": ["exploit", "privesc.sh"]
+            "/root": [".bashrc", ".bash_history", ".ssh", "scripts", "backup.tar.gz"],
+            "/root/.ssh": ["authorized_keys", "id_rsa", "id_rsa.pub", "known_hosts"],
+            "/root/scripts": ["cleanup.sh", "health_check.py", "deploy.sh"],
+            "/etc": ["passwd", "shadow", "hosts", "resolv.conf", "crontab", "nginx", "ssh", "systemd"],
+            "/etc/nginx": ["nginx.conf", "sites-available", "sites-enabled"],
+            "/etc/nginx/sites-available": ["default", "api.conf", "internal-portal.conf"],
+            "/etc/nginx/sites-enabled": ["default", "api.conf"],
+            "/etc/ssh": ["sshd_config", "ssh_config"],
+            "/home": ["ubuntu", "deploy", "sysadmin"],
+            "/home/ubuntu": [".bashrc", ".profile", ".ssh", "webapp", "notes.txt"],
+            "/home/ubuntu/.ssh": ["authorized_keys"],
+            "/home/ubuntu/webapp": ["package.json", "server.js", ".env", "README.md"],
+            "/var/log": ["auth.log", "syslog", "kern.log", "nginx", "apt", "dpkg.log"],
+            "/var/log/nginx": ["access.log", "error.log"],
+            "/var/log/apt": ["history.log", "term.log"],
+            "/var/www/html": ["index.html", "admin.php", "config.php", "robots.txt", "uploads"],
+            "/var/www/html/uploads": [".htaccess", "logo.png"],
+            "/tmp": [".X11-unix", "systemd-private-nginx.service"]
         }
         
         file_contents = {
-            "root.txt": "FLAG{winnie_the_pooh_honey_jar_2026}\r\n",
-            "config.json": '{\n    "db_host": "127.0.0.1",\n    "db_user": "admin",\n    "secret_token": "a8f5c3e921b"\n}\r\n',
+            "passwd": "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin\nubuntu:x:1000:1000:Ubuntu,,,:/home/ubuntu:/bin/bash\ndeploy:x:1001:1001,,,:/home/deploy:/bin/bash\n\r\n",
+            "hosts": "127.0.0.1 localhost\n127.0.1.1 ubuntu-srv-prod-01\n\n# ::1 localhost ip6-localhost ip6-loopback\n\r\n",
+            "resolv.conf": "nameserver 1.1.1.1\nnameserver 8.8.8.8\n\r\n",
+            "crontab": "SHELL=/bin/sh\nPATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin\n\n17 * * * * root cd / && run-parts --report /etc/cron.hourly\n25 6 * * * root test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.daily )\n\r\n",
+            "notes.txt": "Rappels migration:\n- Mettre a jour le certificat SSL du portail interne avant le 15.\n- Verifier les acces base de donnees sur le cluster principal.\n\r\n",
+            ".env": "DB_HOST=127.0.0.1\nDB_PORT=5432\nDB_NAME=production_db\nJWT_SECRET=9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c\n\r\n",
             "auth.log": "Sep 30 12:00:10 ubuntu sshd[8412]: Accepted password for root from 10.0.2.15 port 45123 ssh2\r\nSep 30 12:05:22 ubuntu sshd[8520]: Failed password for invalid user admin from 192.168.1.50 port 51200 ssh2\r\n",
-            "id_rsa": "-----BEGIN OPENSSH PRIVATE KEY-----\r\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlw==\r\n-----END OPENSSH PRIVATE KEY-----\r\n"
+            "access.log": "192.168.1.10 - - [22/Oct/2026:09:12:04 +0200] \"GET / HTTP/1.1\" 200 612 \"-\" \"Mozilla/5.0\"\n10.0.4.2 - - [22/Oct/2026:09:15:30 +0200] \"POST /admin.php HTTP/1.1\" 403 154 \"-\" \"Nikto/2.1.6\"\r\n",
+            "id_rsa": "-----BEGIN OPENSSH PRIVATE KEY-----\r\nb3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlw==\r\n-----END OPENSSH PRIVATE KEY-----\r\n",
+            "config.json": '{\n    "db_host": "127.0.0.1",\n    "db_user": "admin",\n    "secret_token": "a8f5c3e921b"\n}\r\n'
         }
         
         current_dir = "/root"
@@ -75,7 +94,6 @@ def handle_fake_shell(channel, client_ip, port=2222):
                     cmd = buffer.decode("utf-8", errors="ignore").strip()
                     print(f"[CMD] IP: {client_ip} | Commande interceptée à {current_dir} : {cmd}")
                     
-                    # Tampon pour capturer la réponse réelle générée par le faux shell
                     response_buffer = []
                     def shell_output(data):
                         if isinstance(data, str):
@@ -137,7 +155,7 @@ def handle_fake_shell(channel, client_ip, port=2222):
                                 else:
                                     perms = "-rw-r--r--"
                                     links = "1"
-                                    size = "2048" if f == "backups.zip" else "220"
+                                    size = "2048" if f == "backup.tar.gz" else "220"
                                     
                                 line = f"{perms} {links} root root {size:>4} Sep 30 12:00 {f}\r\n"
                                 shell_output(line)
@@ -240,7 +258,6 @@ def handle_fake_shell(channel, client_ip, port=2222):
                     else:
                         shell_output(f"bash: {cmd}: command not found\r\n")
                     
-                    # Enregistrement de la commande et de sa vraie réponse en BDD
                     if cmd != "":
                         log_command(client_ip, cmd, current_dir, "".join(response_buffer), port=port)
                     
@@ -255,7 +272,7 @@ def handle_fake_shell(channel, client_ip, port=2222):
                     else:
                         overflow_bytes += 1
                         channel.send(b'\x07')
-                    
+                
     except Exception as e:
         print(f"[-] Erreur dans le faux shell : {e}")
     finally:

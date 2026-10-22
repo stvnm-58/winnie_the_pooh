@@ -7,6 +7,13 @@ export default function MeshManager() {
   const [portInput, setPortInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // États pour le déploiement en essaim (Swarm aléatoire)
+  const [swarmCount, setSwarmCount] = useState('3');
+  const [swarmMin, setSwarmMin] = useState('3000');
+  const [swarmMax, setSwarmMax] = useState('3010');
+  const [swarmLoading, setSwarmLoading] = useState(false);
+  const [swarmErrorMsg, setSwarmErrorMsg] = useState('');
   
   // États pour gérer l'édition du port par carte (clé = ancien port)
   const [editingPort, setEditingPort] = useState(null);
@@ -63,6 +70,42 @@ export default function MeshManager() {
       setErrorMsg("Impossible de joindre l'API Flask.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeploySwarm = async (e) => {
+    e.preventDefault();
+    const count = Number(swarmCount);
+    const port_min = Number(swarmMin);
+    const port_max = Number(swarmMax);
+
+    if (!Number.isInteger(count) || count < 1 || count > 100) {
+      setSwarmErrorMsg('Le nombre de honeypots doit être entre 1 et 100.');
+      return;
+    }
+    if (!Number.isInteger(port_min) || !Number.isInteger(port_max) || port_min > port_max || port_min < 1 || port_max > 65535) {
+      setSwarmErrorMsg('Plage de ports invalide (1-65535).');
+      return;
+    }
+
+    setSwarmLoading(true);
+    setSwarmErrorMsg('');
+    try {
+      const res = await apiFetch('/honeypots/swarm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count, port_min, port_max })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchHoneypots();
+      } else {
+        setSwarmErrorMsg(data.error || 'Erreur lors du déploiement en essaim.');
+      }
+    } catch {
+      setSwarmErrorMsg("Impossible de joindre l'API Flask.");
+    } finally {
+      setSwarmLoading(false);
     }
   };
 
@@ -178,13 +221,14 @@ export default function MeshManager() {
   return (
     <div className="card">
       <div className="card-header-flex">
-        <h3>🕸️ Gestion de l'Armada (Deception Mesh)</h3>
+        <h3 style={{ fontSize: '1.8rem', color: '#f8fafc', margin: 0 }}>Swarm</h3>
       </div>
       <p className="muted" style={{ marginBottom: '20px' }}>
-        Déployez et pilotez vos faux serveurs SSH sur différents ports pour noyer les attaquants dans une matrice de pièges.
+        Déployez et pilotez vos faux serveurs SSH sur différents ports pour noyer les attaquants dans un essaim de pièges.
       </p>
 
-      <form onSubmit={handleDeploy} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '25px', flexWrap: 'wrap' }}>
+      {/* Déploiement unitaire */}
+      <form onSubmit={handleDeploy} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap' }}>
         <input 
           type="number" 
           min="1"
@@ -201,9 +245,52 @@ export default function MeshManager() {
           disabled={loading}
           style={{ backgroundColor: '#3b82f6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
         >
-          {loading ? 'Déploiement...' : 'Déployer un nouveau faux SSH 🚀'}
+          {loading ? 'Déploiement...' : 'Déployer un nouveau honeypot'}
         </button>
         {errorMsg && <span style={{ color: '#fca5a5', fontSize: '0.85rem' }}>{errorMsg}</span>}
+      </form>
+
+      {/* Déploiement en essaim (Swarm aléatoire) */}
+      <form onSubmit={handleDeploySwarm} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '25px', flexWrap: 'wrap', backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
+        <span style={{ fontSize: '0.9rem', color: '#38bdf8', fontWeight: 'bold' }}>Essaim aléatoire :</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nombre de Honeypots :</label>
+          <input 
+            type="number" 
+            min="1" max="100"
+            value={swarmCount} 
+            onChange={(e) => setSwarmCount(e.target.value)}
+            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '70px' }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Port de départ :</label>
+          <input 
+            type="number" 
+            min="1" max="65535"
+            value={swarmMin} 
+            onChange={(e) => setSwarmMin(e.target.value)}
+            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '90px' }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Port de fin :</label>
+          <input 
+            type="number" 
+            min="1" max="65535"
+            value={swarmMax} 
+            onChange={(e) => setSwarmMax(e.target.value)}
+            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '90px' }}
+          />
+        </div>
+        <button 
+          type="submit" 
+          disabled={swarmLoading}
+          style={{ backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          {swarmLoading ? 'Génération...' : 'Générer'}
+        </button>
+        {swarmErrorMsg && <span style={{ color: '#fca5a5', fontSize: '0.85rem', width: '100%' }}>{swarmErrorMsg}</span>}
       </form>
 
       <h4>Instances de Honeypots Actives ({honeypots.length})</h4>

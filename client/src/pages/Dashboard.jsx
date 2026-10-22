@@ -304,7 +304,7 @@ export default function Dashboard({
       {/* COLONNE DROITE : PANNEAU LATÉRAL DE SÉLECTION DE HONEYPOT UNIQUEMENT */}
       <div>
         <div className="card" style={{ position: 'sticky', top: '20px' }}>
-          <h3 style={{ marginBottom: '15px' }}>🕸️ Deception Mesh</h3>
+          <h3 style={{ marginBottom: '15px' }}>Swarm</h3>
           <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '15px' }}>
             Sélectionnez une instance pour filtrer le tableau de bord :
           </p>
