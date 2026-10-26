@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import SessionReplay from './pages/SessionReplay';
 import MeshManager from './pages/MeshManager';
 import FirewallManager from './pages/FirewallManager';
+import AccountManager from './pages/AccountManager';
 import Login from './pages/Login';
 import { apiFetch } from './api';
 import logo from './assets/HoneypotSwarm.png';
@@ -72,8 +73,9 @@ function applyCountryUpdates(attacks, updates) {
 }
 
 function App() {
+  const isPasswordResetFlow = new URLSearchParams(window.location.search).has('token');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [isCheckingSession, setIsCheckingSession] = useState(!isPasswordResetFlow);
 
   const [attacks, setAttacks] = useState([]);
   const [commands, setCommands] = useState([]);
@@ -123,6 +125,8 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (isPasswordResetFlow) return undefined;
+
     let cancelled = false;
     apiFetch('/session')
       .then(response => {
@@ -145,7 +149,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isPasswordResetFlow]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -334,6 +338,7 @@ function App() {
               <NavLink to="/mesh" style={navLinkStyle}>Swarm Controller</NavLink>
               <NavLink to="/replay" style={navLinkStyle}>Replay</NavLink>
               <NavLink to="/firewall" style={navLinkStyle}>Pare-feu 🛡️</NavLink>
+              <NavLink to="/account" style={navLinkStyle}>Compte</NavLink>
             </nav>
           </div>
 
@@ -400,6 +405,10 @@ function App() {
           <Route 
             path="/firewall" 
             element={<FirewallManager />} 
+          />
+          <Route
+            path="/account"
+            element={<AccountManager />}
           />
         </Routes>
       </div>

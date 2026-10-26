@@ -3,9 +3,11 @@ import sys
 import tempfile
 import unittest
 import json
+from email import message_from_string
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 SERVER_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SERVER_DIR / 'src'))
@@ -118,7 +120,11 @@ class BackendTests(unittest.TestCase):
 
             setup_response = client.post(
                 '/api/setup',
-                json={'username': 'new-admin', 'password': 'a-secure-password'},
+                json={
+                    'username': 'new-admin',
+                    'password': 'a-secure-password',
+                    'email': 'new-admin@example.com'
+                },
                 headers={'Origin': 'http://localhost:5173'}
             )
             self.assertEqual(setup_response.status_code, 201)
@@ -127,6 +133,7 @@ class BackendTests(unittest.TestCase):
                 Path(web_app.AUTH_CONFIG_PATH).read_text(encoding='utf-8')
             )
             self.assertEqual(stored_config['admin_username'], 'new-admin')
+            self.assertEqual(stored_config['admin_email'], 'new-admin@example.com')
             self.assertNotEqual(stored_config['admin_password_hash'], 'a-secure-password')
             self.assertGreaterEqual(len(stored_config['jwt_secret']), 32)
             self.assertEqual(
@@ -226,6 +233,274 @@ class BackendTests(unittest.TestCase):
 
         invalid_limit_response = client.get('/api/attacks?limit=0')
         self.assertEqual(invalid_limit_response.status_code, 400)
+
+    def test_dashboard_data_routes_return_paginated_lists_and_port_filter(self):
+        attack_2222 = database.log_attack(
+            '192.0.2.10', 'user-a', 'pass-a', None, port=2222
+        )
+        attack_2223 = database.log_attack(
+            '192.0.2.11', 'user-b', 'pass-b', None, port=2223
+        )
+        database.log_command(
+            '192.0.2.10', 'whoami', '/root', 'root', port=2222
+        )
+        database.update_attack_country(attack_2222, 'Example')
+
+        client = web_app.app.test_client()
+        self.login(client)
+
+        attacks_response = client.get('/api/attacks?port=2223&limit=1')
+        self.assertEqual(attacks_response.status_code, 200)
+        self.assertEqual(
+            [attack['id'] for attack in attacks_response.get_json()],
+            [attack_2223]
+        )
+        commands_response = client.get('/api/commands?limit=1')
+        self.assertEqual(commands_response.status_code, 200)
+        self.assertEqual(len(commands_response.get_json()), 1)
+        latest_update_response = client.get('/api/country-updates/latest')
+        self.assertEqual(latest_update_response.status_code, 200)
+        latest_update_id = latest_update_response.get_json()['id']
+        updates_response = client.get('/api/country-updates?after_id=0&limit=1')
+        self.assertEqual(updates_response.status_code, 200)
+        self.assertEqual(updates_response.get_json()[0]['country'], 'Example')
+        self.assertEqual(updates_response.get_json()[0]['id'], latest_update_id)
+
+    def test_account_recovery_email_can_be_configured_from_authenticated_account(self):
+        Path(web_app.AUTH_CONFIG_PATH).write_text(
+            json.dumps({
+                'jwt_secret': 'a-test-signing-secret-that-is-at-least-32-bytes',
+                'admin_username': 'admin',
+                'admin_password_hash': generate_password_hash('test-password')
+            }),
+            encoding='utf-8'
+        )
+        client = web_app.app.test_client()
+        with patch.multiple(
+            web_app,
+            JWT_SECRET_KEY='',
+            ADMIN_USERNAME='',
+            ADMIN_PASSWORD_HASH=''
+        ):
+            login_response = self.login(client)
+            self.assertEqual(login_response.status_code, 200)
+            response = client.patch(
+                '/api/account',
+                json={
+                    'email': 'admin@example.com',
+                    'smtp_host': 'smtp.example.com',
+                    'smtp_port': '587',
+                    'smtp_user': 'mailer@example.com',
+                    'smtp_from': 'mailer@example.com',
+                    'smtp_password': 'smtp-app-password'
+                },
+                headers={'Origin': 'http://localhost:5173'}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['email'], 'admin@example.com')
+        self.assertTrue(response.get_json()['smtp_password_configured'])
+        self.assertNotIn('smtp_password', response.get_json())
+        stored_config = json.loads(
+            Path(web_app.AUTH_CONFIG_PATH).read_text(encoding='utf-8')
+        )
+        self.assertEqual(stored_config['admin_email'], 'admin@example.com')
+        self.assertEqual(stored_config['smtp_host'], 'smtp.example.com')
+        self.assertEqual(stored_config['smtp_port'], 587)
+        self.assertEqual(stored_config['smtp_password'], 'smtp-app-password')
+
+    def test_password_recovery_sends_frontend_link_and_rotates_session_key(self):
+        auth_path = Path(web_app.AUTH_CONFIG_PATH)
+        config = {
+            'jwt_secret': 'a-test-signing-secret-that-is-at-least-32-bytes',
+            'admin_username': 'admin',
+            'admin_password_hash': generate_password_hash('old-password'),
+            'admin_email': 'admin@example.com'
+        }
+        auth_path.write_text(json.dumps(config), encoding='utf-8')
+        client = web_app.app.test_client()
+        with patch.multiple(
+            web_app,
+            JWT_SECRET_KEY='',
+            ADMIN_USERNAME='',
+            ADMIN_PASSWORD_HASH=''
+        ):
+            with patch.dict(os.environ, {
+                'HONEYPOT_SMTP_HOST': 'smtp.example.com',
+                'HONEYPOT_SMTP_PORT': '587',
+                'HONEYPOT_SMTP_USERNAME': 'mailer@example.com',
+                'HONEYPOT_SMTP_PASSWORD': 'test-smtp-password',
+                'HONEYPOT_SMTP_FROM': 'mailer@example.com'
+            }):
+                self.assertEqual(
+                    client.post(
+                        '/api/login',
+                        json={'username': 'admin', 'password': 'old-password'},
+                        headers={'Origin': 'http://localhost:5173'}
+                    ).status_code,
+                    200
+                )
+                with patch('web_app.smtplib.SMTP') as smtp_factory:
+                    smtp_server = smtp_factory.return_value.__enter__.return_value
+                    forgot_response = client.post(
+                        '/api/auth/forgot-password',
+                        json={'username': 'admin'},
+                        headers={'Origin': 'http://localhost:5173'}
+                    )
+
+                self.assertEqual(forgot_response.status_code, 200)
+                self.assertEqual(
+                    smtp_server.sendmail.call_args.args[1],
+                    'admin@example.com'
+                )
+                sent_message = message_from_string(
+                    smtp_server.sendmail.call_args.args[2]
+                )
+                message_body = sent_message.get_payload()[0].get_payload(
+                    decode=True
+                ).decode()
+                reset_url = next(
+                    line for line in message_body.splitlines()
+                    if 'token=' in line
+                )
+                parsed_reset_url = urlparse(reset_url)
+                self.assertEqual(
+                    f'{parsed_reset_url.scheme}://{parsed_reset_url.netloc}',
+                    'http://localhost:5173'
+                )
+                token = parse_qs(parsed_reset_url.query)['token'][0]
+                with database._connect() as connection:
+                    stored_token = connection.execute(
+                        'SELECT token FROM password_resets'
+                    ).fetchone()[0]
+                self.assertNotEqual(stored_token, token)
+
+                reset_response = client.post(
+                    '/api/auth/reset-password',
+                    json={'token': token, 'password': 'new-secure-password'},
+                    headers={'Origin': 'http://localhost:5173'}
+                )
+                self.assertEqual(reset_response.status_code, 200)
+                self.assertEqual(client.get('/api/attacks').status_code, 401)
+                self.assertEqual(
+                    client.post(
+                        '/api/auth/reset-password',
+                        json={'token': token, 'password': 'another-password'},
+                        headers={'Origin': 'http://localhost:5173'}
+                    ).status_code,
+                    400
+                )
+
+                updated_config = json.loads(auth_path.read_text(encoding='utf-8'))
+                self.assertNotEqual(updated_config['jwt_secret'], config['jwt_secret'])
+                self.assertTrue(
+                    check_password_hash(
+                        updated_config['admin_password_hash'],
+                        'new-secure-password'
+                    )
+                )
+                self.assertEqual(
+                    client.post(
+                        '/api/login',
+                        json={
+                            'username': 'admin',
+                            'password': 'new-secure-password'
+                        },
+                        headers={'Origin': 'http://localhost:5173'}
+                    ).status_code,
+                    200
+                )
+
+    def test_password_recovery_uses_smtp_settings_saved_in_account_page(self):
+        auth_path = Path(web_app.AUTH_CONFIG_PATH)
+        auth_path.write_text(json.dumps({
+            'jwt_secret': 'a-test-signing-secret-that-is-at-least-32-bytes',
+            'admin_username': 'admin',
+            'admin_password_hash': generate_password_hash('old-password'),
+            'admin_email': 'admin@example.com',
+            'smtp_host': 'smtp.example.com',
+            'smtp_port': 587,
+            'smtp_user': 'mailer@example.com',
+            'smtp_from': 'mailer@example.com',
+            'smtp_password': 'saved-app-password'
+        }), encoding='utf-8')
+        client = web_app.app.test_client()
+
+        with patch.multiple(
+            web_app,
+            JWT_SECRET_KEY='',
+            ADMIN_USERNAME='',
+            ADMIN_PASSWORD_HASH=''
+        ):
+            with patch.dict(os.environ, {}, clear=True):
+                with patch('web_app.smtplib.SMTP') as smtp_factory:
+                    response = client.post(
+                        '/api/auth/forgot-password',
+                        json={'username': 'admin'},
+                        headers={'Origin': 'http://localhost:5173'}
+                    )
+
+        self.assertEqual(response.status_code, 200)
+        smtp_server = smtp_factory.return_value.__enter__.return_value
+        smtp_server.login.assert_called_once_with(
+            'mailer@example.com',
+            'saved-app-password'
+        )
+
+    def test_password_recovery_rejects_untrusted_origins_and_missing_mail_setup(self):
+        client = web_app.app.test_client()
+        untrusted_response = client.post(
+            '/api/auth/forgot-password',
+            json={'username': 'admin'},
+            headers={'Origin': 'https://attacker.example'}
+        )
+        self.assertEqual(untrusted_response.status_code, 403)
+
+        missing_mail_response = client.post(
+            '/api/auth/forgot-password',
+            json={'username': 'admin'},
+            headers={'Origin': 'http://localhost:5173'}
+        )
+        self.assertEqual(missing_mail_response.status_code, 503)
+
+    def test_password_recovery_uses_username_and_does_not_reveal_unknown_users(self):
+        auth_path = Path(web_app.AUTH_CONFIG_PATH)
+        auth_path.write_text(json.dumps({
+            'jwt_secret': 'a-test-signing-secret-that-is-at-least-32-bytes',
+            'admin_username': 'admin',
+            'admin_password_hash': generate_password_hash('old-password'),
+            'admin_email': 'admin@example.com'
+        }), encoding='utf-8')
+        client = web_app.app.test_client()
+
+        with patch.multiple(
+            web_app,
+            JWT_SECRET_KEY='',
+            ADMIN_USERNAME='',
+            ADMIN_PASSWORD_HASH=''
+        ):
+            with patch.dict(os.environ, {
+                'HONEYPOT_SMTP_HOST': 'smtp.example.com',
+                'HONEYPOT_SMTP_PORT': '587',
+                'HONEYPOT_SMTP_USERNAME': 'mailer@example.com',
+                'HONEYPOT_SMTP_PASSWORD': 'test-smtp-password',
+                'HONEYPOT_SMTP_FROM': 'mailer@example.com'
+            }):
+                response = client.post(
+                    '/api/auth/forgot-password',
+                    json={'username': 'unknown-user'},
+                    headers={'Origin': 'http://localhost:5173'}
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()['message'],
+            'Si un compte est associé à cet identifiant, un lien de réinitialisation a été envoyé.'
+        )
+        with database._connect() as connection:
+            self.assertEqual(
+                connection.execute('SELECT COUNT(*) FROM password_resets').fetchone()[0],
+                0
+            )
 
     def test_archiving_moves_all_old_records_and_removes_country_updates(self):
         with database._connect() as conn:

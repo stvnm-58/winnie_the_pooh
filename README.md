@@ -61,12 +61,30 @@ Configuration
 -------------
 - Expected database file: `server/data/honeypot.db`
 - On first launch, open the dashboard and create the administrator account on
-  the login screen. The account is created once and the dashboard logs you in
-  immediately. On later launches, enter the same ID and password. The password hash and signing key
+  the login screen, including a recovery e-mail address. The account is created
+  once and the dashboard logs you in immediately. On later launches, enter the
+  same ID and password. The password hash and signing key
   are stored in `server/data/auth.json`; the password is never stored in clear
   text. Subsequent launches go directly to the regular ID/password login.
 - Keep `server/data/auth.json` private and include it in backups: losing it
   requires creating a new administrator account. It is excluded from Git.
+- Configure password recovery from the authenticated **Compte** page: set the
+  recovery address, SMTP host, port, username and provider app password. Gmail
+  uses `smtp.gmail.com`, port `587` (STARTTLS), and an app password; port `465`
+  uses implicit TLS. The server saves these SMTP settings in the private
+  `server/data/auth.json` file. Restrict access to this file and its backups;
+  the SMTP password is stored there in plaintext. Alternatively, SMTP settings
+  may be supplied through `HONEYPOT_SMTP_HOST`, `HONEYPOT_SMTP_PORT`,
+  `HONEYPOT_SMTP_USERNAME`, `HONEYPOT_SMTP_PASSWORD`, and `HONEYPOT_SMTP_FROM`.
+  `HONEYPOT_ALLOWED_ORIGINS` must include the dashboard origin; recovery links
+  are sent back to the origin that made the request. To request recovery, enter
+  the account's administrator username; the server looks up the stored recovery
+  address and does not disclose whether a username exists.
+- Password recovery is intended for accounts stored in `server/data/auth.json`.
+  If administrator credentials are supplied through environment variables,
+  set `HONEYPOT_ADMIN_EMAIL` in the same secret-management process; password
+  changes must also be made there because the application cannot persistently
+  rewrite environment-provided credentials.
 
 - `HONEYPOT_API_HOST` controls the Flask bind address and defaults to
   `127.0.0.1`. Only bind to a public interface behind a secured deployment.

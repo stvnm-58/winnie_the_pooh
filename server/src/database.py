@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import hashlib
 from datetime import datetime, timezone
 from contextlib import contextmanager
 from paths import SERVER_DATA_DIR
@@ -75,6 +76,18 @@ def init_db():
             'CREATE INDEX IF NOT EXISTS idx_country_updates_attack '
             'ON attack_country_updates(attack_id)'
         )
+
+        # 3. Table pour la réinitialisation de mot de passe
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL,
+                token TEXT UNIQUE NOT NULL,
+                expires_at DATETIME NOT NULL,
+                used INTEGER DEFAULT 0
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(token)')
 
         cursor.execute("PRAGMA table_info(commands)")
         command_columns = [col[1] for col in cursor.fetchall()]
@@ -252,7 +265,14 @@ def get_latest_country_update_id():
             'SELECT COALESCE(MAX(id), 0) FROM attack_country_updates'
         ).fetchone()[0]
 
-def _get_records(table, columns, after_id=None, before_id=None, limit=None):
+def _get_records(
+    table,
+    columns,
+    after_id=None,
+    before_id=None,
+    limit=None,
+    port_filter=None
+):
     if table not in ('attacks', 'commands'):
         raise ValueError(f"Table non supportée : {table}")
 
@@ -265,6 +285,9 @@ def _get_records(table, columns, after_id=None, before_id=None, limit=None):
     if before_id is not None:
         clauses.append('id < ?')
         params.append(before_id)
+    if port_filter is not None:
+        clauses.append('port = ?')
+        params.append(port_filter)
     if clauses:
         query += ' WHERE ' + ' AND '.join(clauses)
     if after_id is not None:
@@ -281,13 +304,14 @@ def _get_records(table, columns, after_id=None, before_id=None, limit=None):
         conn.row_factory = sqlite3.Row
         return [dict(row) for row in conn.execute(query, params).fetchall()]
 
-def get_all_attacks(after_id=None, before_id=None, limit=None):
+def get_all_attacks(after_id=None, before_id=None, limit=None, port_filter=None):
     return _get_records(
         'attacks',
         'id, timestamp, ip_address, username, password, country, port',
         after_id,
         before_id,
-        limit
+        limit,
+        port_filter
     )
 
 def get_all_commands(after_id=None, before_id=None, limit=None):
@@ -324,3 +348,30 @@ def get_stats():
         "total_commands": total_commands,
         "top_countries": top_countries
     }
+
+# --- Fonctions utilitaires pour la réinitialisation de mot de passe ---
+def _password_reset_token_hash(token):
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def create_password_reset_token(username, token, expires_at):
+    with _connect() as conn:
+        conn.execute('''
+            INSERT INTO password_resets (username, token, expires_at, used)
+            VALUES (?, ?, ?, 0)
+        ''', (username, _password_reset_token_hash(token), expires_at))
+
+def consume_password_reset_token(token):
+    with _connect() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute('''
+            SELECT username FROM password_resets
+            WHERE token = ? AND used = 0 AND datetime(expires_at) > datetime('now')
+        ''', (_password_reset_token_hash(token),)).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            'UPDATE password_resets SET used = 1 WHERE username = ? AND used = 0',
+            (row[0],)
+        )
+        return row[0]

@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
 import logo from '../assets/HoneypotSwarm.png';
+import ForgotPassword from './ForgotPassword';
 
 export default function Login({ onLoginSuccess }) {
   const [username, setUsername] = useState('');
+  const [recoveryEmail, setRecoveryEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [setupRequired, setSetupRequired] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isForgotMode, setIsForgotMode] = useState(false);
+
+  // Vérifier aussi si un token est présent dans l'URL pour forcer l'affichage direct de ForgotPassword (reset)
+  const urlParams = new URLSearchParams(window.location.search);
+  const hasTokenInUrl = urlParams.has('token');
 
   useEffect(() => {
     let cancelled = false;
@@ -26,6 +33,13 @@ export default function Login({ onLoginSuccess }) {
     };
   }, []);
 
+  if (isForgotMode || hasTokenInUrl) {
+    return <ForgotPassword onBackToLogin={() => {
+      setIsForgotMode(false);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }} />;
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (setupRequired && password !== passwordConfirmation) {
@@ -39,7 +53,11 @@ export default function Login({ onLoginSuccess }) {
       const res = await apiFetch(setupRequired ? '/setup' : '/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({
+          username,
+          password,
+          ...(setupRequired ? { email: recoveryEmail } : {})
+        })
       });
 
       const data = await res.json();
@@ -128,6 +146,32 @@ export default function Login({ onLoginSuccess }) {
             />
           </div>
 
+          {setupRequired && (
+            <div>
+              <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>
+                Adresse e-mail de récupération
+              </label>
+              <input
+                type="email"
+                autoComplete="email"
+                value={recoveryEmail}
+                onChange={(e) => setRecoveryEmail(e.target.value)}
+                placeholder="admin@example.com"
+                required
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #334155',
+                  backgroundColor: '#0f172a',
+                  color: '#fff',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+          )}
+
           <div>
             <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>Mot de passe</label>
             <input
@@ -198,6 +242,24 @@ export default function Login({ onLoginSuccess }) {
               : (setupRequired ? 'Créer le compte' : 'Se connecter')}
           </button>
         </form>
+
+        {!setupRequired && (
+          <div style={{ textAlign: 'center', marginTop: '16px' }}>
+            <button
+              onClick={() => setIsForgotMode(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#94a3b8',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                textDecoration: 'underline'
+              }}
+            >
+              Mot de passe oublié ?
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
