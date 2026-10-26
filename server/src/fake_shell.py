@@ -9,7 +9,7 @@ def handle_fake_shell(channel, client_ip, port=2222):
     try:
         channel.settimeout(300)
         
-        # Système de fichiers virtuel ultra-réaliste pour piéger les attaquants
+        # Système de fichiers virtuel pour piéger les attaquants
         virtual_fs = {
             "/root": [".bashrc", ".bash_history", ".ssh", "scripts", "backup.tar.gz", "todo.txt"],
             "/root/.ssh": ["authorized_keys", "id_rsa", "id_rsa.pub", "known_hosts"],

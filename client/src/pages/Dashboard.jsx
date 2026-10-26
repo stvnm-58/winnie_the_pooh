@@ -288,7 +288,7 @@ export default function Dashboard({
           </div>
           <div className="console">
             {selectedSessions.length === 0 ? (
-              <p className="muted">Sélectionne une ou plusieurs sessions ci-dessus pour afficher leurs saisies.</p>
+              <p className="muted">Sélectionnez une ou plusieurs sessions ci-dessus pour afficher leurs saisies.</p>
             ) : sortedFilteredCommands.length === 0 ? (
               <p className="muted">Aucune commande enregistrée pour cette/ces session(s).</p>
             ) : (
