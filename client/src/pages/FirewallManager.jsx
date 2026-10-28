@@ -13,6 +13,9 @@ export default function FirewallManager() {
   // États pour la configuration dynamique de l'auto-ban
   const [autoBanConfig, setAutoBanConfig] = useState({ enabled: true, window: 15, max_attempts: 15 });
   const [configLoading, setConfigLoading] = useState(false);
+  
+  // État pour savoir si l'utilisateur est en train de modifier les inputs numériques (évite l'écrasement par le polling)
+  const [isEditingConfig, setIsEditingConfig] = useState(false);
 
   const fetchFirewallData = async () => {
     try {
@@ -28,10 +31,13 @@ export default function FirewallManager() {
         setActiveAttempts(data.active_attempts || {});
       }
 
+      // On ne met à jour la config depuis le serveur que si l'utilisateur n'est pas en train de taper dedans
       const resConfig = await apiFetch('/autoban-config');
       if (resConfig.ok) {
         const data = await resConfig.json();
-        setAutoBanConfig(data);
+        if (!isEditingConfig) {
+          setAutoBanConfig(data);
+        }
       }
     } catch (err) {
       console.error("Erreur lors de la récupération des données du pare-feu :", err);
@@ -45,15 +51,18 @@ export default function FirewallManager() {
       clearTimeout(initialFetch);
       clearInterval(interval);
     };
-  }, []);
+  }, [isEditingConfig]);
 
   const handleUpdateConfig = async (newFields) => {
     setConfigLoading(true);
+    const updated = { ...autoBanConfig, ...newFields };
+    setAutoBanConfig(updated); // Mise à jour locale immédiate
+
     try {
       const res = await apiFetch('/autoban-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...autoBanConfig, ...newFields })
+        body: JSON.stringify(updated)
       });
       if (res.ok) {
         const data = await res.json();
@@ -63,6 +72,7 @@ export default function FirewallManager() {
       console.error("Erreur lors de la mise à jour de la configuration :", err);
     } finally {
       setConfigLoading(false);
+      setIsEditingConfig(false);
     }
   };
 
@@ -140,6 +150,7 @@ export default function FirewallManager() {
             type="number" 
             min="1" max="100"
             value={autoBanConfig.max_attempts}
+            onFocus={() => setIsEditingConfig(true)}
             onChange={(e) => setAutoBanConfig({ ...autoBanConfig, max_attempts: e.target.value })}
             onBlur={(e) => handleUpdateConfig({ max_attempts: Number(e.target.value) })}
             style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '4px 8px', borderRadius: '4px', width: '60px', textAlign: 'center' }}
@@ -152,6 +163,7 @@ export default function FirewallManager() {
             type="number" 
             min="1" max="300"
             value={autoBanConfig.window}
+            onFocus={() => setIsEditingConfig(true)}
             onChange={(e) => setAutoBanConfig({ ...autoBanConfig, window: e.target.value })}
             onBlur={(e) => handleUpdateConfig({ window: Number(e.target.value) })}
             style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '4px 8px', borderRadius: '4px', width: '60px', textAlign: 'center' }}

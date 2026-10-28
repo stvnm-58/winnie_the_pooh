@@ -46,7 +46,8 @@ def get_country_from_ip(ip_address):
     try:
         response = requests.get(
             f"https://ipapi.co/{parsed_ip}/json/",
-            timeout=(2, 3)
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) HoneypotDashboard/1.0"},
+            timeout=(3, 5)
         )
         if response.status_code == 200:
             payload = response.json()

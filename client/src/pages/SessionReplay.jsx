@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { countAttacksByPort, parseDate } from '../attackUtils';
+import {
+  countAttacksByPort,
+  filterAttacksByPort,
+  getAvailablePorts,
+  parseDate
+} from '../attackUtils';
 import './SessionReplay.css';
 
 export default function SessionReplay({ attacks, commands, activeHoneypots, formatDate }) {
@@ -13,23 +18,23 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
     return localStorage.getItem('winnie_replay_last_honeypot') || 'ALL';
   });
 
-  const terminalEndRef = useRef(null);
+  const terminalRef = useRef(null);
 
   useEffect(() => {
     localStorage.setItem('winnie_replay_last_honeypot', selectedPortFilter);
   }, [selectedPortFilter]);
 
   // Liste globale des ports (armada active + historique d'attaques)
-  const availablePorts = useMemo(() => [...new Set([
-    ...(activeHoneypots || []).map(h => h.port),
-    ...attacks.map(a => a.port || 2222)
-  ])].sort((a, b) => a - b), [activeHoneypots, attacks]);
+  const availablePorts = useMemo(
+    () => getAvailablePorts(activeHoneypots, attacks),
+    [activeHoneypots, attacks]
+  );
 
   // Filtrage des attaques selon le port sélectionné dans le panneau
-  const filteredAttacks = useMemo(() => attacks.filter(att => {
-    if (selectedPortFilter === 'ALL') return true;
-    return (att.port || 2222) === Number(selectedPortFilter);
-  }), [attacks, selectedPortFilter]);
+  const filteredAttacks = useMemo(
+    () => filterAttacksByPort(attacks, selectedPortFilter),
+    [attacks, selectedPortFilter]
+  );
 
   const targetAttack = useMemo(() => attacks.find(a =>
     String(a.id) === String(selectedReplaySession) || a.timestamp === selectedReplaySession
@@ -103,7 +108,11 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
   }, [isPlaying, sessionCommands.length, replaySpeed]);
 
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const terminal = terminalRef.current;
+    if (terminal) {
+      // Modification directe de scrollTop pour bloquer le scroll à l'interne du terminal
+      terminal.scrollTop = terminal.scrollHeight;
+    }
   }, [currentReplayIndex]);
 
   const attackCountsByPort = useMemo(() => countAttacksByPort(attacks), [attacks]);
@@ -184,7 +193,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
             </div>
 
             {/* Terminal interactif */}
-            <div className="console replay-terminal">
+            <div className="console replay-terminal" ref={terminalRef}>
               <div style={{ color: '#475569', fontSize: '0.80rem', marginBottom: '15px' }}>
                 [SYSTEM] Session sélectionnée sur le port {targetAttack?.port || 2222} (IP: {targetAttack?.ip_address}) - Connexion SSH simulée rétablie...
               </div>
@@ -206,7 +215,6 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
                   </div>
                 ))
               )}
-              <div ref={terminalEndRef} />
             </div>
 
             {/* Barre de progression */}
@@ -244,7 +252,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
               onClick={() => handlePortFilterChange('ALL')}
               style={{
                 display: 'flex',
-                justify: 'space-between',
+                justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '10px 14px',
                 borderRadius: '8px',
@@ -276,7 +284,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
                   onClick={() => handlePortFilterChange(String(port))}
                   style={{
                     display: 'flex',
-                    justify: 'space-between',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '10px 14px',
                     borderRadius: '8px',

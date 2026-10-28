@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api';
-import { countAttacksByPort, parseDate } from '../attackUtils';
+import {
+  countAttacksByPort,
+  filterAttacksByPort,
+  getAvailablePorts,
+  parseDate
+} from '../attackUtils';
 import useBannedIps from '../hooks/useBannedIps';
 import './Dashboard.css';
 
@@ -54,16 +59,16 @@ export default function Dashboard({
   };
 
   // Liste globale des ports (armada active + historique)
-  const availablePorts = useMemo(() => [...new Set([
-    ...(activeHoneypots || []).map(h => h.port),
-    ...attacks.map(a => a.port || 2222)
-  ])].sort((a, b) => a - b), [activeHoneypots, attacks]);
+  const availablePorts = useMemo(
+    () => getAvailablePorts(activeHoneypots, attacks),
+    [activeHoneypots, attacks]
+  );
 
   // Filtrage des attaques par port
-  const filteredByPortAttacks = useMemo(() => attacks.filter(att => {
-    if (selectedPortFilter === 'ALL') return true;
-    return (att.port || 2222) === Number(selectedPortFilter);
-  }), [attacks, selectedPortFilter]);
+  const filteredByPortAttacks = useMemo(
+    () => filterAttacksByPort(attacks, selectedPortFilter),
+    [attacks, selectedPortFilter]
+  );
 
   const filteredTopCountries = useMemo(() => Object.entries(
     filteredByPortAttacks.reduce((counts, attack) => {
@@ -217,6 +222,7 @@ export default function Dashboard({
                   <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Date & Heure{getSortIndicator('timestamp')}</th>
                   <th onClick={() => handleSort('port')} style={{ cursor: 'pointer' }}>Port Piégé{getSortIndicator('port')}</th>
                   <th onClick={() => handleSort('ip_address')} style={{ cursor: 'pointer' }}>IP Attaquante{getSortIndicator('ip_address')}</th>
+                  <th onClick={() => handleSort('country')} style={{ cursor: 'pointer' }}>Pays{getSortIndicator('country')}</th>
                   <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>Utilisateur{getSortIndicator('username')}</th>
                   <th onClick={() => handleSort('password')} style={{ cursor: 'pointer' }}>Mot de passe{getSortIndicator('password')}</th>
                   <th>Actions Pare-feu</th>
@@ -225,7 +231,7 @@ export default function Dashboard({
               <tbody>
                 {sortedAttacks.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
+                    <td colSpan="7" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
                       Aucune attaque enregistrée pour ce honeypot...
                     </td>
                   </tr>
@@ -244,6 +250,11 @@ export default function Dashboard({
                         <td onClick={() => handleRowClick(sessionKey)}>{formatDate(att.timestamp)}</td>
                         <td onClick={() => handleRowClick(sessionKey)}><span style={{ backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px', color: '#38bdf8', fontWeight: 'bold' }}>{att.port || 2222}</span></td>
                         <td onClick={() => handleRowClick(sessionKey)}><span className="ip-link">{att.ip_address || 'Inconnue'}</span></td>
+                        <td onClick={() => handleRowClick(sessionKey)}>
+                          <span style={{ color: att.country && att.country !== 'Unknown' && att.country !== 'Local Network' ? '#38bdf8' : '#94a3b8' }}>
+                            {att.country || 'Unknown'}
+                          </span>
+                        </td>
                         <td onClick={() => handleRowClick(sessionKey)}>{att.username}</td>
                         <td onClick={() => handleRowClick(sessionKey)}>{att.password}</td>
                         <td>

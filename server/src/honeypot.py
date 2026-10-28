@@ -2,7 +2,6 @@ import socket
 import threading
 import time
 import json
-import os
 import sys
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor

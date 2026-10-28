@@ -14,3 +14,17 @@ export function countAttacksByPort(attacks) {
     return counts;
   }, new Map());
 }
+
+export function getAvailablePorts(activeHoneypots, attacks) {
+  return [...new Set([
+    ...(activeHoneypots || []).map(honeypot => honeypot.port),
+    ...attacks.map(attack => attack.port || 2222)
+  ])].sort((a, b) => a - b);
+}
+
+export function filterAttacksByPort(attacks, selectedPortFilter) {
+  return attacks.filter(attack => (
+    selectedPortFilter === 'ALL'
+    || (attack.port || 2222) === Number(selectedPortFilter)
+  ));
+}
