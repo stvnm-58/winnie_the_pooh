@@ -4,6 +4,7 @@ import { apiFetch } from '../api';
 export default function useBannedIps() {
   const [bannedIps, setBannedIps] = useState([]);
 
+  // Recharge la liste des IP bannies ; en cas d'erreur, conserve les données déjà affichées.
   const refreshBannedIps = useCallback(async () => {
     try {
       const response = await apiFetch('/banned-ips');
@@ -16,6 +17,7 @@ export default function useBannedIps() {
     }
   }, []);
 
+  // Charge la liste dès le montage, puis la rafraîchit périodiquement.
   useEffect(() => {
     const initialFetch = setTimeout(refreshBannedIps, 0);
     const interval = setInterval(refreshBannedIps, 5000);

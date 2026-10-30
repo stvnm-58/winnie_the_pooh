@@ -19,6 +19,7 @@ export default function Dashboard({
   handleToggleSelectAll, 
   formatDate 
 }) {
+  // Construit le tableau des attaques, les commandes de session et les actions du pare-feu.
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
   const [banLoadingIp, setBanLoadingIp] = useState(null);
   const { bannedIps, refreshBannedIps: fetchBannedIps } = useBannedIps();
@@ -28,11 +29,13 @@ export default function Dashboard({
     return localStorage.getItem('winnie_last_honeypot') || 'ALL';
   });
 
+  // Mémorise le filtre de port sélectionné entre les visites de la page.
   useEffect(() => {
     localStorage.setItem('winnie_last_honeypot', selectedPortFilter);
   }, [selectedPortFilter]);
 
   const handleToggleBan = async (ipAddress) => {
+    // Bascule le bannissement de l'adresse et recharge la liste après la modification.
     if (!ipAddress || ipAddress === 'Inconnue' || ipAddress === 'N/A') return;
     
     const isBanned = bannedIps.includes(ipAddress);
@@ -70,6 +73,7 @@ export default function Dashboard({
     [attacks, selectedPortFilter]
   );
 
+  // Recalcule localement les pays affichés quand un seul port est sélectionné.
   const filteredTopCountries = useMemo(() => Object.entries(
     filteredByPortAttacks.reduce((counts, attack) => {
       if (attack.country) counts[attack.country] = (counts[attack.country] || 0) + 1;
@@ -85,6 +89,7 @@ export default function Dashboard({
     && visibleAttackIds.every(id => selectedSessions.includes(id));
 
   const handleSort = (key) => {
+    // Trie une nouvelle colonne par ordre croissant, puis inverse le sens au clic suivant.
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
@@ -92,6 +97,7 @@ export default function Dashboard({
     setSortConfig({ key, direction });
   };
 
+  // Trie une copie pour ne modifier ni l'état React ni la liste d'attaques d'origine.
   const sortedAttacks = useMemo(() => [...filteredByPortAttacks].sort((a, b) => {
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
@@ -114,6 +120,7 @@ export default function Dashboard({
     [filteredByPortAttacks]
   );
 
+  // Associe chaque attaque à la tentative suivante de la même IP et du même port.
   const nextAttackById = useMemo(() => {
     const groups = new Map();
     for (const attack of filteredByPortAttacks) {
@@ -139,6 +146,7 @@ export default function Dashboard({
     return nextAttacks;
   }, [filteredByPortAttacks]);
 
+  // Transforme les attaques sélectionnées en intervalles pour retrouver leurs commandes.
   const sessionWindows = useMemo(() => {
     const windowsBySession = new Map();
     for (const sessionId of selectedSessions) {
@@ -156,6 +164,7 @@ export default function Dashboard({
     return windowsBySession;
   }, [attacksById, nextAttackById, selectedSessions]);
 
+  // Affiche dans l'ordre chronologique les commandes comprises dans les sessions sélectionnées.
   const sortedFilteredCommands = useMemo(() => commands
     .filter(command => {
       const key = JSON.stringify([command.ip_address, command.port || 2222]);
@@ -170,6 +179,7 @@ export default function Dashboard({
   const attackCountsByPort = useMemo(() => countAttacksByPort(attacks), [attacks]);
 
   const getSortIndicator = (key) => {
+    // Indique la colonne triée et le sens du tri dans l'en-tête du tableau.
     if (sortConfig.key !== key) return ' ↕';
     return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
   };

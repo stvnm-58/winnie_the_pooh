@@ -28,6 +28,7 @@ export default function MeshManager() {
 
   const navigate = useNavigate();
 
+  // Récupère la liste des honeypots actifs affichés dans les cartes.
   const fetchHoneypots = async () => {
     try {
       const res = await apiFetch('/honeypots');
@@ -40,6 +41,7 @@ export default function MeshManager() {
     }
   };
 
+  // Actualise périodiquement les honeypots et nettoie les minuteries au démontage.
   useEffect(() => {
     const initialFetch = setTimeout(fetchHoneypots, 0);
     const interval = setInterval(fetchHoneypots, 4000);
@@ -49,6 +51,7 @@ export default function MeshManager() {
     };
   }, []);
 
+  // Valide le port saisi et déploie un honeypot dessus.
   const handleDeploy = async (e) => {
     e.preventDefault();
     const portNum = Number(portInput);
@@ -79,6 +82,7 @@ export default function MeshManager() {
     }
   };
 
+  // Valide la plage demandée et déploie un groupe de honeypots aléatoires.
   const handleDeploySwarm = async (e) => {
     e.preventDefault();
     const count = Number(swarmCount);
@@ -115,6 +119,7 @@ export default function MeshManager() {
     }
   };
 
+  // Déploie plusieurs honeypots sur des ports disponibles autour du port de référence.
   const handleDeployReference = async (e) => {
     e.preventDefault();
     const count = Number(refCount);
@@ -150,6 +155,7 @@ export default function MeshManager() {
     }
   };
 
+  // Demande confirmation avant d'arrêter le honeypot du port choisi.
   const handleStop = async (port) => {
     if (!window.confirm(`Voulez-vous vraiment stopper le faux SSH sur le port ${port} ?`)) return;
 
@@ -168,6 +174,7 @@ export default function MeshManager() {
     }
   };
 
+  // Change le port ; pour un honeypot secondaire, démarre le remplaçant avant l'arrêt.
   const handleUpdatePort = async (oldPort) => {
     const targetPort = Number(newPortInput);
     if (!Number.isInteger(targetPort) || targetPort < 1 || targetPort > 65535) {
@@ -223,6 +230,7 @@ export default function MeshManager() {
         method: 'DELETE'
       });
       if (!stopRes.ok) {
+        // Si l'ancien honeypot ne s'arrête pas, tente d'annuler le nouveau déploiement.
         const stopData = await stopRes.json();
         let rollbackMessage;
         try {
@@ -253,6 +261,7 @@ export default function MeshManager() {
     }
   };
 
+  // Mémorise le port choisi avant de revenir au tableau de bord.
   const handleOpenDashboard = (port) => {
     localStorage.setItem('winnie_last_honeypot', String(port));
     navigate('/');

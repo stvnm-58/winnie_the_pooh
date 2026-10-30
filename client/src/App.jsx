@@ -12,6 +12,7 @@ import './App.css';
 
 const API_PAGE_SIZE = 500;
 
+// Récupère une ressource JSON et remonte les erreurs HTTP à la boucle de mise à jour.
 async function fetchJson(path, signal) {
   const response = await apiFetch(path, { signal });
   if (!response.ok) {
@@ -20,6 +21,7 @@ async function fetchJson(path, signal) {
   return response.json();
 }
 
+// Charge tout l'historique par pages en remontant les identifiants jusqu'à la dernière page.
 async function fetchAllRecords(endpoint, signal) {
   const records = [];
   let beforeId;
@@ -39,6 +41,7 @@ async function fetchAllRecords(endpoint, signal) {
   }
 }
 
+// Récupère les nouvelles entrées après un curseur et les remet dans l'ordre chronologique.
 async function fetchNewRecords(endpoint, afterId, signal) {
   const records = [];
   let cursor = afterId;
@@ -60,6 +63,7 @@ async function fetchNewRecords(endpoint, afterId, signal) {
   }
 }
 
+// Ajoute aux attaques en mémoire les résultats GeoIP reçus après leur création.
 function applyCountryUpdates(attacks, updates) {
   if (!updates.length) return attacks;
   const countryByAttackId = new Map(
@@ -73,6 +77,7 @@ function applyCountryUpdates(attacks, updates) {
 }
 
 function App() {
+  // Centralise l'authentification, les données du tableau de bord et l'état des pages.
   const isPasswordResetFlow = new URLSearchParams(window.location.search).has('token');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(!isPasswordResetFlow);
@@ -90,6 +95,7 @@ function App() {
   const hasLoadedData = useRef(false);
   const lastStatsFetch = useRef(0);
 
+  // Réinitialise les données et curseurs pour éviter de réutiliser ceux d'une autre session.
   const resetSessionData = useCallback(() => {
     hasLoadedData.current = false;
     attacksCursor.current = 0;
@@ -103,11 +109,13 @@ function App() {
     setSelectedSessions([]);
   }, []);
 
+  // Réinitialise les données précédentes avant d'ouvrir la session authentifiée.
   const handleLoginSuccess = () => {
     resetSessionData();
     setIsAuthenticated(true);
   };
 
+  // Termine la session serveur et nettoie l'état local même si la requête échoue.
   const handleLogout = useCallback(async () => {
     try {
       await apiFetch('/logout', { method: 'POST' });
@@ -119,11 +127,13 @@ function App() {
     }
   }, [resetSessionData]);
 
+  // Actualise l'horloge indépendamment des requêtes périodiques à l'API.
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Restaure une session existante au chargement, sauf lors d'une réinitialisation de mot de passe.
   useEffect(() => {
     if (isPasswordResetFlow) return undefined;
 
@@ -151,6 +161,7 @@ function App() {
     };
   }, [isPasswordResetFlow]);
 
+  // Actualise les données uniquement si l'utilisateur est connecté et annule les requêtes au départ.
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -158,8 +169,10 @@ function App() {
     let timer;
     let cancelled = false;
 
+    // Récupère les données initiales puis orchestre leurs mises à jour périodiques.
     const fetchData = async () => {
       try {
+        // Le premier chargement récupère l'historique ; les suivants ne prennent que les nouvelles entrées.
         const isInitialLoad = !hasLoadedData.current;
         if (isInitialLoad) {
           const latestCountryUpdate = await fetchJson(
@@ -179,6 +192,7 @@ function App() {
           countryUpdatesCursor.current,
           controller.signal
         );
+        // Les statistiques, plus coûteuses, sont actualisées moins souvent que les données en direct.
         const shouldRefreshStats = isInitialLoad || Date.now() - lastStatsFetch.current >= 15000;
         const [newAttacks, newCommands, countryUpdates, newStats, honeypotData] = await Promise.all([
           attacksRequest,
@@ -192,6 +206,7 @@ function App() {
 
         if (cancelled) return;
 
+        // Charge l'historique une fois, puis ajoute les nouvelles entrées et leurs résultats GeoIP.
         if (isInitialLoad) {
           setAttacks(applyCountryUpdates(newAttacks, countryUpdates));
           setCommands(newCommands);
@@ -206,6 +221,7 @@ function App() {
           if (newCommands.length) setCommands(current => [...newCommands, ...current]);
         }
 
+        // Avance chaque curseur jusqu'aux identifiants reçus pour ne manquer aucune entrée.
         attacksCursor.current = newAttacks.reduce(
           (maxId, attack) => Math.max(maxId, attack.id),
           attacksCursor.current
@@ -256,6 +272,7 @@ function App() {
   }
 
   const formatDate = (dateString) => {
+    // Les dates du backend sans fuseau horaire sont stockées en UTC.
     if (!dateString) return 'N/A';
     let formattedString = dateString;
     if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
@@ -276,6 +293,7 @@ function App() {
   };
 
   const handleRowClick = (attackId) => {
+    // Un identifiant nul efface la sélection ; sinon, bascule la sélection d'une attaque.
     if (attackId === null) {
       setSelectedSessions([]);
       return;
@@ -288,6 +306,7 @@ function App() {
   };
 
   const handleToggleSelectAll = (attackIds = attacks.map(att => att.id)) => {
+    // Bascule les éléments fournis sans modifier les sélections hors de ce sous-ensemble.
     setSelectedSessions(currentSessions => (
       attackIds.every(id => currentSessions.includes(id))
         ? currentSessions.filter(id => !attackIds.includes(id))
@@ -295,6 +314,7 @@ function App() {
     ));
   };
 
+  // Adapte l'apparence du lien de navigation à son état actif.
   const navLinkStyle = ({ isActive }) => ({
     backgroundColor: isActive ? '#3b82f6' : 'transparent',
     color: '#fff',

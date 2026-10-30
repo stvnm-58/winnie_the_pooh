@@ -13,10 +13,11 @@ export default function Login({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [isForgotMode, setIsForgotMode] = useState(false);
 
-  // Vérifier aussi si un token est présent dans l'URL pour forcer l'affichage direct de ForgotPassword (reset)
+  // Un lien de réinitialisation ouvre directement l'écran correspondant.
   const urlParams = new URLSearchParams(window.location.search);
   const hasTokenInUrl = urlParams.has('token');
 
+  // Détermine s'il faut créer le compte administrateur ou afficher la connexion.
   useEffect(() => {
     let cancelled = false;
     apiFetch('/auth-status')
@@ -34,12 +35,14 @@ export default function Login({ onLoginSuccess }) {
   }, []);
 
   if (isForgotMode || hasTokenInUrl) {
+    // Quitter le formulaire de récupération revient à la connexion et retire le jeton de l'URL.
     return <ForgotPassword onBackToLogin={() => {
       setIsForgotMode(false);
       window.history.replaceState({}, document.title, window.location.pathname);
     }} />;
   }
 
+  // Envoie la création initiale du compte ou la connexion selon l'état du backend.
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (setupRequired && password !== passwordConfirmation) {

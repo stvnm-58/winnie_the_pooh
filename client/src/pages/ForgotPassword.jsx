@@ -14,6 +14,7 @@ export default function ForgotPassword({ onBackToLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Demande un courriel de récupération sans révéler si le compte existe.
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -34,6 +35,7 @@ export default function ForgotPassword({ onBackToLogin }) {
     }
   };
 
+  // Vérifie la confirmation du mot de passe avant d'envoyer le jeton à l'API.
   const handleResetSubmit = async (e) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {

@@ -23,6 +23,7 @@ SHUTDOWN_EVENT = threading.Event()
 
 class HoneypotServer(paramiko.ServerInterface):
     def __init__(self, client_ip, port):
+        # Conserver le contexte de connexion et synchroniser le lancement du shell.
         self.client_ip = client_ip
         self.port = port
         self.event = threading.Event()
@@ -30,9 +31,11 @@ class HoneypotServer(paramiko.ServerInterface):
         self.shell_started = False
 
     def check_auth_publickey(self, username, key):
+        # Refuser les clés publiques : le honeypot capture les essais par mot de passe.
         return paramiko.AUTH_FAILED
 
     def check_auth_password(self, username, password):
+        # Enregistrer l'essai, puis enrichir son pays en arrière-plan.
         attack_id = log_attack(
             self.client_ip, username, password, None, port=self.port
         )
@@ -50,14 +53,17 @@ class HoneypotServer(paramiko.ServerInterface):
         return paramiko.AUTH_SUCCESSFUL
 
     def get_allowed_auths(self, username):
+        # Advertise password authentication as the only supported method.
         return "password"
 
     def check_channel_request(self, kind, chanid):
+        # Allow interactive SSH sessions only.
         if kind == 'session':
             return paramiko.OPEN_SUCCEEDED
         return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
 
     def check_channel_shell_request(self, channel):
+        # Démarrer un seul faux shell par connexion, sans bloquer le transport SSH.
         with self.shell_lock:
             if self.shell_started:
                 return False
@@ -76,9 +82,11 @@ class HoneypotServer(paramiko.ServerInterface):
         return True
 
     def check_channel_pty_request(self, *args, **kwargs):
+        # Accept pseudo-terminal requests for shell clients.
         return True
 
 def handle_connection(client, addr, port):
+    # Gérer la négociation et la durée de vie d'une connexion SSH.
     client_ip = addr[0]
     transport = None
     try:
@@ -94,6 +102,7 @@ def handle_connection(client, addr, port):
         server = HoneypotServer(client_ip, port)
         transport.start_server(server=server)
         
+        # Fermer les connexions qui n'ouvrent pas de shell dans les cinq minutes.
         if not server.event.wait(timeout=300):
             return
         
@@ -103,6 +112,7 @@ def handle_connection(client, addr, port):
     except Exception as e:
         print(f"[-] Erreur de transport avec {client_ip} sur port {port}: {e}")
     finally:
+        # Libérer le transport et le socket, même après une erreur.
         try:
             if transport:
                 transport.close()
@@ -111,6 +121,7 @@ def handle_connection(client, addr, port):
 
 
 def _handle_connection_with_slot(client, addr, port):
+    # Garantir la libération du créneau même si le traitement SSH échoue.
     try:
         handle_connection(client, addr, port)
     finally:
@@ -118,17 +129,20 @@ def _handle_connection_with_slot(client, addr, port):
 
 
 def resolve_attack_country(attack_id, client_ip):
+    # Résoudre le pays de l'IP et mettre à jour l'attaque déjà enregistrée.
     country = get_country_from_ip(client_ip)
     update_attack_country(attack_id, country)
 
 
 def log_country_lookup_error(future):
+    # Report asynchronous GeoIP failures without affecting the captured attack.
     error = future.exception()
     if error is not None:
         print(f"[-] Échec de la géolocalisation d'une attaque : {error}")
 
 
 def archive_periodically():
+    # Archiver les données de plus de 30 jours une fois par jour.
     while not SHUTDOWN_EVENT.wait(24 * 60 * 60):
         try:
             archive_old_data(days=30)
@@ -136,6 +150,7 @@ def archive_periodically():
             print(f"[-] Erreur lors de l'archivage périodique : {error}")
 
 def get_configured_port():
+    # Lire et valider le port du listener principal ; utiliser 2222 si la configuration est absente ou invalide.
     try:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
@@ -156,6 +171,7 @@ def get_configured_port():
     return 2222
 
 def main():
+    # Initialiser la base et laisser l'instance principale seule responsable de l'archivage.
     init_db()
     is_primary_instance = '--no-archive' not in sys.argv[1:]
     if is_primary_instance:
@@ -166,7 +182,7 @@ def main():
             daemon=True
         ).start()
     
-    # Récupération du port (soit passé en argument par le dashboard, soit via config.json)
+    # Utiliser le port fourni en argument, ou celui de config.json à défaut.
     port_argument = next(
         (argument for argument in sys.argv[1:] if argument.isdecimal()),
         None
@@ -178,6 +194,7 @@ def main():
     else:
         port = get_configured_port()
     
+    # Ouvrir le listener SSH sur toutes les interfaces.
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind(("0.0.0.0", port))
@@ -186,6 +203,7 @@ def main():
     print(f"[*] Honeypot SSH (Deception Mesh Node) démarré sur le port {port}...")
 
     try:
+        # Accepter les connexions en limitant le nombre de traitements simultanés.
         while True:
             client, addr = server_socket.accept()
             if not CONNECTION_SLOTS.acquire(blocking=False):
@@ -201,10 +219,12 @@ def main():
                     daemon=True
                 ).start()
             except RuntimeError as error:
+                # Annuler l'acquisition si le thread n'a pas pu démarrer.
                 CONNECTION_SLOTS.release()
                 client.close()
                 print(f"[-] Impossible de créer le thread de connexion : {error}")
     finally:
+        # Signaler l'arrêt et fermer le socket d'écoute.
         SHUTDOWN_EVENT.set()
         server_socket.close()
 

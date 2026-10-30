@@ -8,6 +8,7 @@ import {
 import './SessionReplay.css';
 
 export default function SessionReplay({ attacks, commands, activeHoneypots, formatDate }) {
+  // Gère ici la session choisie, la position de lecture et sa vitesse.
   const [selectedReplaySession, setSelectedReplaySession] = useState('');
   const [currentReplayIndex, setCurrentReplayIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -20,22 +21,24 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
 
   const terminalRef = useRef(null);
 
+  // Mémorise le filtre de port lors des changements de page.
   useEffect(() => {
     localStorage.setItem('winnie_replay_last_honeypot', selectedPortFilter);
   }, [selectedPortFilter]);
 
-  // Liste globale des ports (armada active + historique d'attaques)
+  // Réunit les ports actifs et ceux présents dans l'historique des attaques.
   const availablePorts = useMemo(
     () => getAvailablePorts(activeHoneypots, attacks),
     [activeHoneypots, attacks]
   );
 
-  // Filtrage des attaques selon le port sélectionné dans le panneau
+  // Filtre les sessions par port, sauf si l'affichage global est sélectionné.
   const filteredAttacks = useMemo(
     () => filterAttacksByPort(attacks, selectedPortFilter),
     [attacks, selectedPortFilter]
   );
 
+  // Retrouve l'attaque choisie pour déterminer l'intervalle de commandes associé.
   const targetAttack = useMemo(() => attacks.find(a =>
     String(a.id) === String(selectedReplaySession) || a.timestamp === selectedReplaySession
   ), [attacks, selectedReplaySession]);
@@ -50,7 +53,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
     const startDate = parseDate(targetAttack.timestamp);
     const targetPort = targetAttack.port || 2222;
 
-    // Prochaine attaque de la même IP sur le même port pour délimiter la fin de session
+    // La prochaine attaque de la même IP et du même port marque la fin de la session.
     const nextAttack = sortedAttacks.find(
       a => a.ip_address === targetAttack.ip_address 
         && (a.port || 2222) === targetPort
@@ -58,7 +61,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
     );
     const endDate = nextAttack ? parseDate(nextAttack.timestamp) : new Date();
 
-    // Filtrage précis des commandes correspondantes
+    // Les commandes n'ont pas d'identifiant d'attaque : l'association repose sur l'IP, le port et la date.
     const filtered = commands.filter(cmd => {
       const cmdDate = parseDate(cmd.timestamp);
       const cmdPort = cmd.port || 2222;
@@ -73,17 +76,19 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
   }, [selectedReplaySession, targetAttack, sortedAttacks, commands]);
 
   const handleSessionChange = (sessionId) => {
+    // Repart de zéro et arrête la lecture lorsqu'une autre session est sélectionnée.
     setSelectedReplaySession(sessionId);
     setIsPlaying(false);
     setCurrentReplayIndex(0);
   };
 
   const handlePortFilterChange = (port) => {
+    // Efface la session courante, qui peut ne pas correspondre au nouveau port.
     setSelectedPortFilter(port);
     handleSessionChange('');
   };
 
-  // Logique de lecture automatique
+  // Affiche les commandes une par une et arrête la lecture à la fin de la session.
   useEffect(() => {
     let interval;
     if (isPlaying) {
@@ -108,6 +113,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
   }, [isPlaying, sessionCommands.length, replaySpeed]);
 
   useEffect(() => {
+    // Garde la dernière commande affichée visible pendant la lecture.
     const terminal = terminalRef.current;
     if (terminal) {
       // Modification directe de scrollTop pour bloquer le scroll à l'interne du terminal
@@ -115,6 +121,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
     }
   }, [currentReplayIndex]);
 
+  // Calcule les totaux par port utilisés dans le sélecteur latéral.
   const attackCountsByPort = useMemo(() => countAttacksByPort(attacks), [attacks]);
 
   return (

@@ -17,6 +17,7 @@ export default function FirewallManager() {
   // État pour savoir si l'utilisateur est en train de modifier les inputs numériques (évite l'écrasement par le polling)
   const [isEditingConfig, setIsEditingConfig] = useState(false);
 
+  // Recharge les compteurs d'auto-ban, les tentatives actives et la configuration.
   const fetchFirewallData = async () => {
     try {
       const resStats = await apiFetch('/autoban-stats');
@@ -44,6 +45,7 @@ export default function FirewallManager() {
     }
   };
 
+  // Actualise les données du pare-feu et arrête les minuteries au démontage.
   useEffect(() => {
     const initialFetch = setTimeout(fetchFirewallData, 0);
     const interval = setInterval(fetchFirewallData, 3000);
@@ -53,6 +55,7 @@ export default function FirewallManager() {
     };
   }, [isEditingConfig]);
 
+  // Applique immédiatement les changements, puis synchronise la configuration avec l'API.
   const handleUpdateConfig = async (newFields) => {
     setConfigLoading(true);
     const updated = { ...autoBanConfig, ...newFields };
@@ -76,6 +79,7 @@ export default function FirewallManager() {
     }
   };
 
+  // Bannit l'adresse saisie puis recharge les données du pare-feu.
   const handleManualBan = async (e) => {
     e.preventDefault();
     if (!inputIp.trim()) return;
@@ -103,6 +107,7 @@ export default function FirewallManager() {
     }
   };
 
+  // Débannit l'adresse et recharge les listes des bannissements et des tentatives.
   const handleUnban = async (ipAddress) => {
     try {
       const res = await apiFetch('/unban', {

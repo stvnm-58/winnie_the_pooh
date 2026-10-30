@@ -2,18 +2,23 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
 
 export default function AccountManager() {
+  // Valeurs des paramètres du compte et du serveur SMTP affichées dans le formulaire.
   const [email, setEmail] = useState('');
   const [smtpHost, setSmtpHost] = useState('');
   const [smtpPort, setSmtpPort] = useState('587');
   const [smtpUser, setSmtpUser] = useState('');
   const [smtpFrom, setSmtpFrom] = useState('');
+  // Le secret SMTP saisi reste local au formulaire ; l'API indique seulement s'il est déjà configuré.
   const [smtpPassword, setSmtpPassword] = useState('');
   const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false);
+  // Sépare le chargement initial de l'enregistrement afin de gérer l'interface et désactiver les champs.
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Messages présentés à l'utilisateur après un échec ou un enregistrement réussi.
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
+  // Charge les paramètres existants à l'ouverture et remplit le formulaire avec les valeurs du compte.
   useEffect(() => {
     let cancelled = false;
     apiFetch('/account')
@@ -21,6 +26,7 @@ export default function AccountManager() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Impossible de charger le compte.');
         if (!cancelled) {
+          // Mappe les noms de propriétés de l'API vers les états contrôlant chaque champ.
           setEmail(data.email || '');
           setSmtpHost(data.smtp_host || '');
           setSmtpPort(data.smtp_port || '587');
@@ -30,19 +36,24 @@ export default function AccountManager() {
         }
       })
       .catch(fetchError => {
+        // Garde l'erreur dans l'interface plutôt que de laisser le formulaire sembler chargé.
         if (!cancelled) setError(fetchError.message || 'Impossible de joindre le serveur.');
       })
       .finally(() => {
+        // Termine l'état de chargement même si la requête échoue.
         if (!cancelled) setLoading(false);
       });
     return () => {
+      // Ignore les callbacks tardifs si l'utilisateur quitte la page pendant la requête.
       cancelled = true;
     };
   }, []);
 
+  // Envoie tous les paramètres modifiables au backend, puis synchronise le formulaire avec sa réponse.
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
+    // Efface les retours précédents pour que le résultat corresponde à cette tentative.
     setError('');
     setMessage('');
 
@@ -50,6 +61,7 @@ export default function AccountManager() {
       const response = await apiFetch('/account', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        // L'API attend les noms snake_case ; le mot de passe n'est transmis qu'au moment de l'enregistrement.
         body: JSON.stringify({
           email,
           smtp_host: smtpHost,
@@ -61,8 +73,10 @@ export default function AccountManager() {
       });
       const data = await response.json();
       if (!response.ok) {
+        // Affiche le message d'erreur fourni par le serveur si les paramètres sont refusés.
         setError(data.error || 'Impossible de mettre à jour le compte.');
       } else {
+        // Remplace les valeurs locales par la configuration acceptée et efface le secret du champ.
         setEmail(data.email);
         setSmtpHost(data.smtp_host || '');
         setSmtpPort(data.smtp_port || '587');
@@ -73,8 +87,10 @@ export default function AccountManager() {
         setMessage('Paramètres du compte enregistrés.');
       }
     } catch {
+      // Cette branche couvre notamment l'absence de réponse de l'API.
       setError('Impossible de joindre le serveur.');
     } finally {
+      // Réactive les champs et le bouton dans les deux cas, succès comme échec.
       setSaving(false);
     }
   };
@@ -95,6 +111,7 @@ export default function AccountManager() {
         <p role="status" style={{ color: '#86efac' }}>{message}</p>
       )}
 
+      {/* Les champs sont contrôlés par l'état React ; le formulaire envoie leur contenu via handleSubmit. */}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <label style={{ color: '#94a3b8', fontSize: '0.85rem' }} htmlFor="recovery-email">
           Adresse e-mail de récupération
@@ -118,6 +135,7 @@ export default function AccountManager() {
             boxSizing: 'border-box'
           }}
         />
+        {/* Paramètres de connexion au serveur utilisé pour envoyer les courriels de récupération. */}
         <label style={{ color: '#94a3b8', fontSize: '0.85rem' }} htmlFor="smtp-host">
           Serveur SMTP
         </label>
