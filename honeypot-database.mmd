@@ -1,0 +1,65 @@
+erDiagram
+    ATTACKS {
+        INTEGER id PK "Auto-increment primary key"
+        DATETIME timestamp
+        TEXT ip_address
+        TEXT username
+        TEXT password
+        TEXT country
+        INTEGER port "Default 2222"
+    }
+
+    COMMANDS {
+        INTEGER id PK "Auto-increment primary key"
+        DATETIME timestamp
+        TEXT ip_address
+        TEXT command
+        TEXT current_dir
+        TEXT response
+        INTEGER port "Default 2222"
+    }
+
+    ATTACK_COUNTRY_UPDATES {
+        INTEGER id PK "Auto-increment primary key"
+        INTEGER attack_id "Logical reference to ATTACKS.id; no FK constraint"
+        TEXT country
+    }
+
+    PASSWORD_RESETS {
+        INTEGER id PK "Auto-increment primary key"
+        TEXT username
+        TEXT token UK
+        DATETIME expires_at
+        INTEGER used "Default 0"
+    }
+
+    ARCHIVE_ATTACKS {
+        INTEGER id PK "Copied from ATTACKS.id"
+        DATETIME timestamp
+        TEXT ip_address
+        TEXT username
+        TEXT password
+        TEXT country
+        INTEGER port "Default 2222"
+    }
+
+    ARCHIVE_COMMANDS {
+        INTEGER id PK "Copied from COMMANDS.id"
+        DATETIME timestamp
+        TEXT ip_address
+        TEXT command
+        TEXT current_dir
+        TEXT response
+        INTEGER port "Default 2222"
+    }
+
+    ATTACKS ||--o{ ATTACK_COUNTRY_UPDATES : "logical association by attack_id"
+
+%% honeypot.db contains ATTACKS, COMMANDS, ATTACK_COUNTRY_UPDATES, and PASSWORD_RESETS.
+%% archive.db contains ARCHIVE_ATTACKS and ARCHIVE_COMMANDS; old records are moved
+%% from the active database after 30 days. The two databases are separate.
+%% The attack_id association is not declared as a SQLite foreign key.
+%% Commands have no attack_id: the application correlates them to a session by
+%% source IP, honeypot port, and timestamp range.
+%% Administrator credentials, recovery/SMTP settings, and honeypot configuration
+%% are stored in JSON files, not in these SQLite databases.
