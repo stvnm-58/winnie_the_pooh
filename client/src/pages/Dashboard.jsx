@@ -81,8 +81,7 @@ export default function Dashboard({
     }, {})
   )
     .map(([country, count]) => ({ country, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5), [filteredByPortAttacks]);
+    .sort((a, b) => b.count - a.count), [filteredByPortAttacks]);
 
   const visibleAttackIds = filteredByPortAttacks.map(attack => attack.id);
   const areVisibleAttacksSelected = visibleAttackIds.length > 0
@@ -201,15 +200,17 @@ export default function Dashboard({
 
           <div className="card">
             <h3>Pays d'origine</h3>
-            <ul className="list">
-              {(selectedPortFilter === 'ALL' ? stats?.top_countries : filteredTopCountries)?.length > 0 ? (
-                (selectedPortFilter === 'ALL' ? stats.top_countries : filteredTopCountries).map((c, i) => (
-                  <li key={i}>{c.country} ({c.count} attaques)</li>
-                ))
-              ) : (
-                <li>Non spécifié / Local</li>
-              )}
-            </ul>
+            <div className="country-list-scroll">
+              <ul className="list">
+                {(selectedPortFilter === 'ALL' ? stats?.top_countries : filteredTopCountries)?.length > 0 ? (
+                  (selectedPortFilter === 'ALL' ? stats.top_countries : filteredTopCountries).map((c, i) => (
+                    <li key={i}>{c.country} ({c.count} attaques)</li>
+                  ))
+                ) : (
+                  <li>Non spécifié / Local</li>
+                )}
+              </ul>
+            </div>
           </div>
         </div>
 

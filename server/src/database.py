@@ -338,7 +338,6 @@ def get_stats():
             WHERE country IS NOT NULL
             GROUP BY country
             ORDER BY count DESC
-            LIMIT 5
         ''')
         top_countries = [{"country": row[0], "count": row[1]} for row in cursor.fetchall()]
     
