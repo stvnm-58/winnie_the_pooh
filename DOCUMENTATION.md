@@ -100,7 +100,7 @@
           │ 4. Requête HTTP GET (via CORS)
           │
   +───────────────────────────────────────────────────────────+
-  |                 Front-end (Angular/React)                 |
+  |                 Front-end (React)                         |
   |                   (Dashboard / Table)                     |
   +───────────────────────────────────────────────────────────+
           ▲
@@ -225,4 +225,4 @@ Les tests utilisent des bases SQLite temporaires et ne modifient pas les donnée
 * **Python & Paramiko :** Choisi pour sa rapidité de développement, sa flexibilité dans la manipulation des sockets réseau et son module robuste d'émulation de protocole SSH.
 * **Flask :** Léger, minimaliste et idéal pour monter rapidement une API REST sans la lourdeur d'un framework comme Django.
 * **SQLite :** Solution embarquée parfaite pour un MVP, évitant la configuration d'un serveur de base de données externe tout en garantissant la persistance des données.
-* **Angular / SPA :** Choisi pour structurer proprement le front-end du dashboard de monitoring avec une architecture modulaire et rigoureuse.
+* **REACT :** Choisi pour structurer proprement le front-end du dashboard de monitoring avec une architecture modulaire et rigoureuse.
