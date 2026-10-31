@@ -6,10 +6,10 @@ Ce document présente la roadmap globale du projet, structurée en phases logiqu
 
 | N° | Phase | Objectifs principaux | Durée estimée |
 | :--- | :--- | :--- | :--- |
-| **1** | **Setup & Infrastructure** | Initialisation du repo, config Docker, setup Python/Angular. | 3 jours |
+| **1** | **Setup & Infrastructure** | Initialisation du repo, config Docker, setup Python/REACT. | 3 jours |
 | **2** | **Core Honeypot (Back)** | Développement du serveur SSH, logs, persistance des données. | 7 jours |
 | **3** | **API & Backend** | Création de l'API pour exposer les données du honeypot. | 5 jours |
-| **4** | **Dashboard (Front)** | Développement Angular, connexion API, intégration des graphiques. | 10 jours |
+| **4** | **Dashboard (Front)** | Développement REACT, connexion API, intégration des graphiques. | 10 jours |
 | **5** | **Test, Sécurité & Doc** | Tests de simulation, finalisation, rédaction de la doc technique. | 5 jours |
 
 ---
