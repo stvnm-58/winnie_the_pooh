@@ -305,9 +305,9 @@ You can provide a port as a positional argument instead, for example
 `python src/honeypot.py 2223`. The listener binds to all network interfaces
 (`0.0.0.0`); configure the host firewall and network exposure deliberately.
 
-The dashboard's **Mesh** page can start and stop additional listeners. The
-**Dashboard** shows captured activity, **Replay** presents recorded command
-activity, **Firewall** manages bans, and **Account** manages the recovery
+The dashboard's **Swarm Controller** page can start and stop additional listeners. The
+**Tableau de bord** shows captured activity, **Replay** presents recorded command
+activity, **Pare-feu** manages bans, and **Compte** manages the recovery
 address and SMTP settings.
 
 ## Configuration
@@ -475,8 +475,3 @@ npm run build
 - Back up `server/data/` securely, especially `auth.json` and the SQLite
   databases. Never commit runtime data, credentials, or SMTP secrets.
 
-## Contributing
-
-Contributions are welcome. For changes, include or update tests as appropriate
-and verify the backend tests and frontend lint/build commands above. Please
-open an issue to discuss substantial changes before submitting a pull request.
