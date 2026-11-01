@@ -1,34 +1,182 @@
-body {
-  background-color: #0f172a;
-  color: #f8fafc;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  margin: 0;
-  padding: 0;
-}
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.card {
-  background-color: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.card-header-flex {
+/* Habillage de la barre d'application rendue par App.jsx : identité, navigation et actions de session. */
+.app-top-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  gap: 16px 20px;
+  margin-bottom: 28px;
 }
-
-.muted {
-  color: #64748b;
-  font-style: italic;
+ 
+/* .app-header-left aligne l'identité et l'état ; le groupe logo/title garde ces éléments côte à côte. */
+.app-header-left {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+}
+ 
+.app-logo-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+ 
+.app-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: contain;
+}
+ 
+.app-main-title {
+  margin: 0;
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+ 
+/* La pastille et son point prennent l'état is-active/is-inactive fourni par App.jsx. */
+ 
+.app-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid;
+}
+ 
+.app-status-pill.is-active {
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.28);
+}
+ 
+.app-status-pill.is-inactive {
+  background: var(--danger-soft);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+ 
+.app-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+ 
+.app-status-dot.is-active {
+  background: var(--live);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.18);
+}
+ 
+.app-status-dot.is-inactive {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.18);
+}
+ 
+.app-status-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+ 
+.app-status-pill.is-active .app-status-text {
+  color: var(--live-text);
+}
+ 
+.app-status-pill.is-inactive .app-status-text {
+  color: var(--danger-text);
+}
+ 
+/* .app-nav contient les liens de page ; .is-active met en évidence la route courante. */
+ 
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+ 
+.app-nav-link {
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+ 
+.app-nav-link:hover {
+  background: rgba(168, 162, 158, 0.1);
+  color: var(--text);
+}
+ 
+.app-nav-link.is-active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+ 
+/* En-tête droit : horloge locale et bouton de déconnexion. */
+ 
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+ 
+.app-clock-box {
+  padding: 6px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--mono);
+  text-align: right;
+}
+ 
+.app-clock-time {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--accent);
+}
+ 
+.app-clock-date {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+ 
+.app-logout-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  border-radius: var(--radius-md);
+  font: 600 14px var(--font);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+ 
+.app-logout-btn:hover {
+  background: rgba(244, 63, 94, 0.22);
+}
+ 
+@media (max-width: 900px) {
+  .app-nav {
+    width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .app-nav-link {
+    white-space: nowrap;
+  }
 }

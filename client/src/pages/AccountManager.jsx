@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
+import './AccountManager.css';
 
+// Écran Compte : configure l'adresse de récupération et les paramètres SMTP.
 export default function AccountManager() {
   // Valeurs des paramètres du compte et du serveur SMTP affichées dans le formulaire.
   const [email, setEmail] = useState('');
@@ -96,7 +98,8 @@ export default function AccountManager() {
   };
 
   return (
-    <div className="card" style={{ maxWidth: '620px' }}>
+    // Carte centrale : messages d'état en haut, formulaire de paramètres en dessous.
+    <div className="card account-card">
       <div className="card-header-flex">
         <h3>Gestion du compte</h3>
       </div>
@@ -105,15 +108,15 @@ export default function AccountManager() {
       </p>
 
       {error && (
-        <p role="alert" style={{ color: '#fca5a5' }}>{error}</p>
+        <p role="alert" className="account-alert-error">{error}</p>
       )}
       {message && (
-        <p role="status" style={{ color: '#86efac' }}>{message}</p>
+        <p role="status" className="account-alert-success">{message}</p>
       )}
 
       {/* Les champs sont contrôlés par l'état React ; le formulaire envoie leur contenu via handleSubmit. */}
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <label style={{ color: '#94a3b8', fontSize: '0.85rem' }} htmlFor="recovery-email">
+      <form onSubmit={handleSubmit} className="account-form">
+        <label className="account-label" htmlFor="recovery-email">
           Adresse e-mail de récupération
         </label>
         <input
@@ -124,19 +127,11 @@ export default function AccountManager() {
           onChange={(event) => setEmail(event.target.value)}
           required
           disabled={loading || saving}
-          style={{
-            width: '100%',
-            padding: '10px 12px',
-            borderRadius: '6px',
-            border: '1px solid #334155',
-            backgroundColor: '#0f172a',
-            color: '#fff',
-            outline: 'none',
-            boxSizing: 'border-box'
-          }}
+          className="account-input"
         />
+
         {/* Paramètres de connexion au serveur utilisé pour envoyer les courriels de récupération. */}
-        <label style={{ color: '#94a3b8', fontSize: '0.85rem' }} htmlFor="smtp-host">
+        <label className="account-label" htmlFor="smtp-host">
           Serveur SMTP
         </label>
         <input
@@ -147,11 +142,13 @@ export default function AccountManager() {
           value={smtpHost}
           onChange={(event) => setSmtpHost(event.target.value)}
           disabled={loading || saving}
-          style={inputStyle}
+          className="account-input"
         />
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ flex: '0 1 120px' }}>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.85rem', marginBottom: '6px' }} htmlFor="smtp-port">
+
+        {/* Ligne à deux colonnes : port SMTP à gauche et identifiant à droite. */}
+        <div className="account-row-flex">
+          <div className="account-col-port">
+            <label className="account-label label-block-spaced" htmlFor="smtp-port">
               Port
             </label>
             <input
@@ -162,11 +159,11 @@ export default function AccountManager() {
               value={smtpPort}
               onChange={(event) => setSmtpPort(event.target.value)}
               disabled={loading || saving}
-              style={inputStyle}
+              className="account-input"
             />
           </div>
-          <div style={{ flex: '1 1 220px' }}>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.85rem', marginBottom: '6px' }} htmlFor="smtp-user">
+          <div className="account-col-user">
+            <label className="account-label label-block-spaced" htmlFor="smtp-user">
               Identifiant SMTP
             </label>
             <input
@@ -176,11 +173,12 @@ export default function AccountManager() {
               value={smtpUser}
               onChange={(event) => setSmtpUser(event.target.value)}
               disabled={loading || saving}
-              style={inputStyle}
+              className="account-input"
             />
           </div>
         </div>
-        <label style={{ color: '#94a3b8', fontSize: '0.85rem' }} htmlFor="smtp-from">
+
+        <label className="account-label" htmlFor="smtp-from">
           Adresse d’expéditeur
         </label>
         <input
@@ -191,9 +189,11 @@ export default function AccountManager() {
           value={smtpFrom}
           onChange={(event) => setSmtpFrom(event.target.value)}
           disabled={loading || saving}
-          style={inputStyle}
+          className="account-input"
         />
-        <label style={{ color: '#94a3b8', fontSize: '0.85rem' }} htmlFor="smtp-password">
+
+        {/* Mot de passe SMTP masqué : il n'est saisi que pour configurer ou remplacer le secret. */}
+        <label className="account-label" htmlFor="smtp-password">
           Mot de passe SMTP {smtpPasswordConfigured && '(déjà enregistré ; saisir uniquement pour le remplacer)'}
         </label>
         <input
@@ -204,25 +204,17 @@ export default function AccountManager() {
           onChange={(event) => setSmtpPassword(event.target.value)}
           disabled={loading || saving}
           placeholder={smtpPasswordConfigured ? '••••••••••••' : 'Mot de passe d’application'}
-          style={inputStyle}
+          className="account-input"
         />
-        <p className="muted" style={{ fontSize: '0.8rem', margin: 0 }}>
+
+        <p className="muted account-help-text">
           Port 587 : STARTTLS. Port 465 : TLS. Le mot de passe est conservé uniquement côté serveur et n’est jamais renvoyé au navigateur.
         </p>
+
         <button
           type="submit"
           disabled={loading || saving}
-          style={{
-            alignSelf: 'flex-start',
-            padding: '10px 16px',
-            backgroundColor: '#3b82f6',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            opacity: loading || saving ? 0.7 : 1
-          }}
+          className="account-submit-btn"
         >
           {saving ? 'Enregistrement...' : 'Enregistrer'}
         </button>
@@ -230,14 +222,3 @@ export default function AccountManager() {
     </div>
   );
 }
-
-const inputStyle = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: '6px',
-  border: '1px solid #334155',
-  backgroundColor: '#0f172a',
-  color: '#fff',
-  outline: 'none',
-  boxSizing: 'border-box'
-};

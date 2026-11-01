@@ -1,0 +1,129 @@
+/* Page Compte : largeur de la carte, retours d'état et formulaire d'e-mail/SMTP. */
+.account-card {
+  max-width: 640px;
+}
+ 
+.account-card > .muted {
+  margin: 0 0 24px;
+  line-height: 1.6;
+}
+ 
+/* Messages situés sous l'en-tête : erreur en rose, confirmation en vert. */
+ 
+.account-alert-error,
+.account-alert-success {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  line-height: 1.5;
+}
+ 
+.account-alert-error {
+  background: var(--danger-soft);
+  border-color: rgba(244, 63, 94, 0.4);
+  color: var(--danger-text);
+}
+ 
+.account-alert-success {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.4);
+  color: var(--live-text);
+}
+ 
+/* .account-form empile les champs ; .account-label et .account-input habillent labels et contrôles. */
+ 
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+ 
+.account-label {
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+ 
+.account-form > .account-label:first-child {
+  margin-top: 0;
+}
+ 
+.account-label.label-block-spaced {
+  display: block;
+  margin: 0 0 6px;
+}
+ 
+.account-input {
+  display: block;
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  background: var(--surface-3);
+  border: 1px solid rgba(168, 162, 158, 0.25);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font: 400 15px var(--font);
+  transition: border-color 0.15s ease;
+}
+ 
+.account-input::placeholder {
+  color: var(--muted);
+}
+ 
+.account-input:focus {
+  border-color: var(--accent);
+}
+ 
+.account-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+ 
+/* Ligne responsive des paramètres SMTP : port étroit (.account-col-port), identifiant flexible (.account-col-user). */
+.account-row-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 14px;
+}
+ 
+.account-col-port {
+  flex: 0 1 120px;
+}
+ 
+.account-col-user {
+  flex: 1 1 220px;
+}
+ 
+.account-help-text {
+  margin: 14px 0 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Bouton d'enregistrement aligné au début du formulaire, avec états survolé/désactivé. */
+.account-submit-btn {
+  align-self: flex-start;
+  min-height: 48px;
+  padding: 0 28px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--accent-ink);
+  font: 700 15px var(--font);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+ 
+.account-submit-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+ 
+.account-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

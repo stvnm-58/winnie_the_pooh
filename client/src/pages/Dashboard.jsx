@@ -9,6 +9,7 @@ import {
 import useBannedIps from '../hooks/useBannedIps';
 import './Dashboard.css';
 
+// Vue de surveillance : statistiques et flux d'attaques à gauche, filtre des honeypots à droite.
 export default function Dashboard({ 
   attacks, 
   commands, 
@@ -19,23 +20,20 @@ export default function Dashboard({
   handleToggleSelectAll, 
   formatDate 
 }) {
-  // Construit le tableau des attaques, les commandes de session et les actions du pare-feu.
+  // État d'interface : tri, action de pare-feu en cours et port affiché.
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
   const [banLoadingIp, setBanLoadingIp] = useState(null);
   const { bannedIps, refreshBannedIps: fetchBannedIps } = useBannedIps();
   
-  // Persistance du dernier honeypot sélectionné dans le localStorage
   const [selectedPortFilter, setSelectedPortFilter] = useState(() => {
     return localStorage.getItem('winnie_last_honeypot') || 'ALL';
   });
 
-  // Mémorise le filtre de port sélectionné entre les visites de la page.
   useEffect(() => {
     localStorage.setItem('winnie_last_honeypot', selectedPortFilter);
   }, [selectedPortFilter]);
 
   const handleToggleBan = async (ipAddress) => {
-    // Bascule le bannissement de l'adresse et recharge la liste après la modification.
     if (!ipAddress || ipAddress === 'Inconnue' || ipAddress === 'N/A') return;
     
     const isBanned = bannedIps.includes(ipAddress);
@@ -61,19 +59,17 @@ export default function Dashboard({
     }
   };
 
-  // Liste globale des ports (armada active + historique)
+  // Prépare les ports, attaques, pays et commandes correspondant au filtre sélectionné.
   const availablePorts = useMemo(
     () => getAvailablePorts(activeHoneypots, attacks),
     [activeHoneypots, attacks]
   );
 
-  // Filtrage des attaques par port
   const filteredByPortAttacks = useMemo(
     () => filterAttacksByPort(attacks, selectedPortFilter),
     [attacks, selectedPortFilter]
   );
 
-  // Recalcule localement les pays affichés quand un seul port est sélectionné.
   const filteredTopCountries = useMemo(() => Object.entries(
     filteredByPortAttacks.reduce((counts, attack) => {
       if (attack.country) counts[attack.country] = (counts[attack.country] || 0) + 1;
@@ -88,7 +84,6 @@ export default function Dashboard({
     && visibleAttackIds.every(id => selectedSessions.includes(id));
 
   const handleSort = (key) => {
-    // Trie une nouvelle colonne par ordre croissant, puis inverse le sens au clic suivant.
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
@@ -96,7 +91,6 @@ export default function Dashboard({
     setSortConfig({ key, direction });
   };
 
-  // Trie une copie pour ne modifier ni l'état React ni la liste d'attaques d'origine.
   const sortedAttacks = useMemo(() => [...filteredByPortAttacks].sort((a, b) => {
     let aValue = a[sortConfig.key];
     let bValue = b[sortConfig.key];
@@ -114,12 +108,12 @@ export default function Dashboard({
     return 0;
   }), [filteredByPortAttacks, sortConfig]);
 
+  // Reconstitue les fenêtres de session à partir des attaques successives d'une même IP/port.
   const attacksById = useMemo(
     () => new Map(filteredByPortAttacks.map(attack => [attack.id, attack])),
     [filteredByPortAttacks]
   );
 
-  // Associe chaque attaque à la tentative suivante de la même IP et du même port.
   const nextAttackById = useMemo(() => {
     const groups = new Map();
     for (const attack of filteredByPortAttacks) {
@@ -145,7 +139,6 @@ export default function Dashboard({
     return nextAttacks;
   }, [filteredByPortAttacks]);
 
-  // Transforme les attaques sélectionnées en intervalles pour retrouver leurs commandes.
   const sessionWindows = useMemo(() => {
     const windowsBySession = new Map();
     for (const sessionId of selectedSessions) {
@@ -163,7 +156,6 @@ export default function Dashboard({
     return windowsBySession;
   }, [attacksById, nextAttackById, selectedSessions]);
 
-  // Affiche dans l'ordre chronologique les commandes comprises dans les sessions sélectionnées.
   const sortedFilteredCommands = useMemo(() => commands
     .filter(command => {
       const key = JSON.stringify([command.ip_address, command.port || 2222]);
@@ -178,17 +170,18 @@ export default function Dashboard({
   const attackCountsByPort = useMemo(() => countAttacksByPort(attacks), [attacks]);
 
   const getSortIndicator = (key) => {
-    // Indique la colonne triée et le sens du tri dans l'en-tête du tableau.
     if (sortConfig.key !== key) return ' ↕';
     return sortConfig.direction === 'asc' ? ' ▲' : ' ▼';
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px' }}>
+    <div className="dashboard-main-grid">
       
       {/* COLONNE GAUCHE : STATISTIQUES, TABLEAU & CONSOLE */}
       <div>
+        {/* Résumé en haut de la colonne : volume d'attaques et répartition par pays. */}
         <div className="grid-2">
+          {/* Carte de volume : total global ou nombre d'attaques sur le port filtré. */}
           <div className="card">
             <h3>{selectedPortFilter === 'ALL' ? 'Attaques Totales' : `Attaques (Port ${selectedPortFilter})`}</h3>
             <p className="big-number">
@@ -198,6 +191,7 @@ export default function Dashboard({
             </p>
           </div>
 
+          {/* Carte de pays : classement global ou recalculé pour le port sélectionné. */}
           <div className="card">
             <h3>Pays d'origine</h3>
             <div className="country-list-scroll">
@@ -214,8 +208,9 @@ export default function Dashboard({
           </div>
         </div>
 
+        {/* Tableau du flux : tri par colonne, sélection des sessions et action bannir/débannir. */}
         <div className="card">
-          <div className="card-header-flex" style={{ flexWrap: 'wrap', gap: '15px' }}>
+          <div className="card-header-flex dashboard-header-wrap">
             <h3>Flux Direct {selectedPortFilter !== 'ALL' && `- Focus Port ${selectedPortFilter}`}</h3>
             
             {filteredByPortAttacks.length > 0 && (
@@ -225,24 +220,23 @@ export default function Dashboard({
             )}
           </div>
 
-          {/* Conteneur défilant pour limiter l'affichage vertical */}
-          <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid #1e293b', borderRadius: '6px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ position: 'sticky', top: 0, backgroundColor: '#0f172a', zIndex: 1 }}>
+          <div className="dashboard-table-wrapper">
+            <table>
+              <thead>
                 <tr>
-                  <th onClick={() => handleSort('timestamp')} style={{ cursor: 'pointer' }}>Date & Heure{getSortIndicator('timestamp')}</th>
-                  <th onClick={() => handleSort('port')} style={{ cursor: 'pointer' }}>Port Piégé{getSortIndicator('port')}</th>
-                  <th onClick={() => handleSort('ip_address')} style={{ cursor: 'pointer' }}>IP Attaquante{getSortIndicator('ip_address')}</th>
-                  <th onClick={() => handleSort('country')} style={{ cursor: 'pointer' }}>Pays{getSortIndicator('country')}</th>
-                  <th onClick={() => handleSort('username')} style={{ cursor: 'pointer' }}>Utilisateur{getSortIndicator('username')}</th>
-                  <th onClick={() => handleSort('password')} style={{ cursor: 'pointer' }}>Mot de passe{getSortIndicator('password')}</th>
+                  <th onClick={() => handleSort('timestamp')}>Date & Heure{getSortIndicator('timestamp')}</th>
+                  <th onClick={() => handleSort('port')}>Port Piégé{getSortIndicator('port')}</th>
+                  <th onClick={() => handleSort('ip_address')}>IP Attaquante{getSortIndicator('ip_address')}</th>
+                  <th onClick={() => handleSort('country')}>Pays{getSortIndicator('country')}</th>
+                  <th onClick={() => handleSort('username')}>Utilisateur{getSortIndicator('username')}</th>
+                  <th onClick={() => handleSort('password')}>Mot de passe{getSortIndicator('password')}</th>
                   <th>Actions Pare-feu</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedAttacks.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="muted" style={{ textAlign: 'center', padding: '20px' }}>
+                    <td colSpan="7" className="muted dashboard-empty-cell">
                       Aucune attaque enregistrée pour ce honeypot...
                     </td>
                   </tr>
@@ -252,6 +246,7 @@ export default function Dashboard({
                     const isSelected = selectedSessions.includes(sessionKey);
                     const isBanned = bannedIps.includes(att.ip_address);
                     const isThisLoading = banLoadingIp === att.ip_address;
+                    const hasValidCountry = att.country && att.country !== 'Unknown' && att.country !== 'Local Network';
 
                     return (
                       <tr 
@@ -259,10 +254,14 @@ export default function Dashboard({
                         className={`clickable-row ${isSelected ? 'row-selected' : ''}`}
                       >
                         <td onClick={() => handleRowClick(sessionKey)}>{formatDate(att.timestamp)}</td>
-                        <td onClick={() => handleRowClick(sessionKey)}><span style={{ backgroundColor: '#1e293b', padding: '2px 8px', borderRadius: '4px', color: '#38bdf8', fontWeight: 'bold' }}>{att.port || 2222}</span></td>
-                        <td onClick={() => handleRowClick(sessionKey)}><span className="ip-link">{att.ip_address || 'Inconnue'}</span></td>
                         <td onClick={() => handleRowClick(sessionKey)}>
-                          <span style={{ color: att.country && att.country !== 'Unknown' && att.country !== 'Local Network' ? '#38bdf8' : '#94a3b8' }}>
+                          <span className="dashboard-port-badge">{att.port || 2222}</span>
+                        </td>
+                        <td onClick={() => handleRowClick(sessionKey)}>
+                          <span className="ip-link">{att.ip_address || 'Inconnue'}</span>
+                        </td>
+                        <td onClick={() => handleRowClick(sessionKey)}>
+                          <span className={hasValidCountry ? 'dashboard-country-highlight' : 'muted'}>
                             {att.country || 'Unknown'}
                           </span>
                         </td>
@@ -275,17 +274,7 @@ export default function Dashboard({
                               handleToggleBan(att.ip_address);
                             }}
                             disabled={isThisLoading || !att.ip_address || att.ip_address === '127.0.0.1'}
-                            style={{
-                              backgroundColor: isBanned ? '#22c55e' : '#ef4444',
-                              color: '#fff',
-                              border: 'none',
-                              padding: '4px 8px',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '0.75rem',
-                              fontWeight: 'bold',
-                              opacity: isThisLoading ? 0.6 : 1
-                            }}
+                            className={`dashboard-ban-btn ${isBanned ? 'is-banned' : 'is-active'} ${isThisLoading ? 'is-loading' : ''}`}
                           >
                             {isThisLoading ? '...' : (isBanned ? 'Débannir 🛡️' : 'Bannir 🚫')}
                           </button>
@@ -299,6 +288,7 @@ export default function Dashboard({
           </div>
         </div>
 
+        {/* Console des commandes enregistrées pour les sessions sélectionnées dans le tableau. */}
         <div className="card">
           <div className="card-header-flex">
             <h3>Commandes saisies dans le Honeypot</h3>
@@ -326,86 +316,51 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* COLONNE DROITE : PANNEAU LATÉRAL DE SÉLECTION DE HONEYPOT UNIQUEMENT */}
+      {/* COLONNE DROITE : PANNEAU LATÉRAL DE SÉLECTION DE HONEYPOT */}
       <div>
-        <div className="card" style={{ position: 'sticky', top: '20px' }}>
-          <h3 style={{ marginBottom: '15px' }}>Swarm</h3>
-          <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '15px' }}>
+        {/* Panneau latéral droit : filtre global ou par port, avec statut et nombre d'attaques. */}
+        <div className="card dashboard-sticky-card">
+          <h3 className="dashboard-sidebar-title">Swarm</h3>
+          <p className="muted dashboard-sidebar-subtitle">
             Sélectionnez une instance pour filtrer le tableau de bord :
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="dashboard-sidebar-stack">
             <button
               onClick={() => setSelectedPortFilter('ALL')}
-              style={{
-                display: 'flex',
-                justify: 'space-between',
-                alignItems: 'center',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #334155',
-                backgroundColor: selectedPortFilter === 'ALL' ? '#3b82f6' : '#0f172a',
-                color: '#fff',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                textAlign: 'left',
-                width: '100%',
-                boxSizing: 'border-box'
-              }}
+              className={`dashboard-sidebar-btn ${selectedPortFilter === 'ALL' ? 'is-active' : ''}`}
             >
-              <span>🌐 Vue Globale</span>
-              <span style={{ fontSize: '0.85rem', opacity: 0.9, marginLeft: '10px' }}>({attacks.length})</span>
+              <span>Vue Globale</span>
+              <span className="dashboard-sidebar-count">({attacks.length})</span>
             </button>
 
-            <hr style={{ border: 'none', borderTop: '1px solid #334155', margin: '5px 0' }} />
+            <hr className="dashboard-sidebar-divider" />
 
-            {availablePorts.map((port) => {
-              const isLive = (activeHoneypots || []).some(h => h.port === port);
-              const count = attackCountsByPort.get(port) || 0;
-              const isSelected = selectedPortFilter === String(port);
+            {/* Liste des ports : défile quand il y a beaucoup de honeypots */}
+            <div className="dashboard-port-scroll">
+              {availablePorts.map((port) => {
+                const isLive = (activeHoneypots || []).some(h => h.port === port);
+                const count = attackCountsByPort.get(port) || 0;
+                const isSelected = selectedPortFilter === String(port);
 
-              return (
-                <button
-                  key={port}
-                  onClick={() => setSelectedPortFilter(String(port))}
-                  style={{
-                    display: 'flex',
-                    justify: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #334155',
-                    backgroundColor: isSelected ? '#3b82f6' : '#0f172a',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    gap: '15px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                    <span style={{
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      backgroundColor: isLive ? '#22c55e' : '#64748b',
-                      flexShrink: 0
-                    }}></span>
-                    <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Port {port}</span>
-                  </div>
+                return (
+                  <button
+                    key={port}
+                    onClick={() => setSelectedPortFilter(String(port))}
+                    className={`dashboard-sidebar-btn dashboard-port-row ${isSelected ? 'is-active' : ''}`}
+                  >
+                    <div className="dashboard-port-info">
+                      <span className={`dashboard-status-dot ${isLive ? 'is-live' : 'is-offline'}`}></span>
+                      <span className="dashboard-port-label">Port {port}</span>
+                    </div>
 
-                  <span style={{ 
-                    fontSize: '0.80rem', 
-                    color: isSelected ? '#ffffff' : '#94a3b8',
-                    whiteSpace: 'nowrap',
-                    marginLeft: 'auto'
-                  }}>
-                    {count} attaque{count > 1 ? 's' : ''}
-                  </span>
-                </button>
-              );
-            })}
+                    <span className="dashboard-port-attacks-count">
+                      {count} attaque{count > 1 ? 's' : ''}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

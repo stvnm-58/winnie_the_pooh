@@ -1,137 +1,255 @@
-body {
-  background-color: #121212;
-  color: #e0e0e0;
-  font-family: Arial, sans-serif;
-  margin: 0;
-  padding: 0;
+/* Fondations communes à toutes les pages : thème, conteneurs, cartes, tables, boutons et console. */
+:root {
+  color-scheme: dark;
+ 
+  /* Surfaces */
+  --bg: #0c0a09;
+  --surface: #171412;
+  --surface-2: #1c1816;
+  --surface-3: #120f0e;
+  --console-bg: #0a0807;
+ 
+  /* Lignes et textes */
+  --border: rgba(168, 162, 158, 0.14);
+  --border-soft: rgba(168, 162, 158, 0.1);
+  --text: #f5f5f4;
+  --text-2: #d6d3d1;
+  --muted: #a8a29e;
+ 
+  /* Accent miel */
+  --accent: #fbbf24;
+  --accent-ink: #1a1200;
+  --accent-soft: rgba(251, 191, 36, 0.12);
+  --accent-faint: rgba(251, 191, 36, 0.05);
+ 
+  /* États */
+  --live: #34d399;
+  --live-text: #6ee7b7;
+  --danger: #f43f5e;
+  --danger-text: #fda4af;
+  --danger-soft: rgba(244, 63, 94, 0.12);
+ 
+  /* Formes et polices */
+  --radius-lg: 20px;
+  --radius-md: 12px;
+  --radius-sm: 10px;
+  --font: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
-
-.container {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 25px;
+ 
+* {
   box-sizing: border-box;
 }
-
-h1 {
-  margin-bottom: 25px;
-  font-size: 22px;
+ 
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 400px at 15% -10%, rgba(251, 191, 36, 0.1), transparent 60%),
+    radial-gradient(700px 400px at 100% 0%, rgba(45, 212, 191, 0.05), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
-
+ 
+h1 {
+  margin: 0 0 24px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+ 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+ 
+/* .container centre le contenu ; .grid-2 répartit deux panneaux et s'empile sur petit écran. */
+ 
+.container {
+  width: 100%;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 24px 32px 48px;
+}
+ 
 .grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  margin-bottom: 24px;
 }
-
+ 
+@media (max-width: 900px) {
+  .container {
+    padding: 20px 16px 40px;
+  }
+  .grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+ 
+/* .card fournit le panneau standard ; les classes card-* alignent son en-tête et ses indicateurs. */
+ 
 .card {
-  background: #1e1e1e;
-  border: 1px solid #333;
-  border-radius: 6px;
-  padding: 20px;
-  margin-bottom: 20px;
+  min-width: 0;
+  margin-bottom: 24px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
 }
-
+ 
 .card h3 {
-  margin-top: 0;
+  margin: 0 0 16px;
   font-size: 15px;
-  color: #aaa;
+  font-weight: 600;
+  color: var(--muted);
 }
-
-.big-number {
-  font-size: 32px;
-  font-weight: bold;
-  color: #4caf50;
-  margin: 10px 0 0 0;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  font-size: 14px;
-}
-
-th, td {
-  padding: 10px;
-  text-align: left;
-  border-bottom: 1px solid #2c2c2c;
-}
-
-th {
-  color: #888;
-}
-
-.clickable-row {
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.clickable-row:hover {
-  background-color: rgba(100, 181, 246, 0.08);
-}
-
-.clickable-row:hover td {
-  color: #90caf9;
-}
-
-.row-selected {
-  background-color: rgba(100, 181, 246, 0.15) !important;
-  border-left: 3px solid #64b5f6;
-}
-
-.ip-link {
-  color: #64b5f6;
-  font-weight: bold;
-}
-
+ 
 .card-header-flex {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
 }
-
-.btn-reset {
-  background: #333;
-  color: #fff;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
-  cursor: pointer;
+ 
+.card-header-flex h3 {
+  margin: 0;
+}
+ 
+.big-number {
+  margin: 8px 0 0;
+  font-size: clamp(44px, 5vw, 72px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--accent);
+}
+ 
+.muted {
+  color: var(--muted);
+}
+ 
+/* Styles de base des tableaux ; les classes clickable-row/row-selected signalent les sessions choisies. */
+ 
+table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+ 
+th,
+td {
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-soft);
+}
+ 
+th {
+  background: var(--surface-3);
+  color: var(--muted);
   font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
-
-.btn-reset:hover {
-  background: #444;
+ 
+thead th:first-child {
+  border-top-left-radius: var(--radius-sm);
 }
-
-.console {
-  background: #0a0a0a;
-  border: 1px solid #222;
-  border-radius: 4px;
-  padding: 15px;
-  font-family: monospace;
-  max-height: 250px;
-  overflow-y: auto;
+ 
+thead th:last-child {
+  border-top-right-radius: var(--radius-sm);
+}
+ 
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+ 
+.clickable-row:hover {
+  background-color: var(--accent-faint);
+}
+ 
+.clickable-row:hover td {
+  color: var(--text);
+}
+ 
+.row-selected {
+  background-color: var(--accent-soft) !important;
+}
+ 
+.row-selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+ 
+.ip-link,
+.ip-highlight {
+  color: var(--accent);
+  font-family: var(--mono);
   font-size: 13px;
 }
-
+ 
+.ip-link {
+  font-weight: 600;
+}
+ 
+/* .btn-reset : bouton secondaire partagé, notamment pour réinitialiser ou masquer une sélection. */
+ 
+.btn-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  border: 1px solid rgba(168, 162, 158, 0.25);
+  border-radius: var(--radius-sm);
+  font: 500 13px var(--font);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+ 
+.btn-reset:hover {
+  border-color: rgba(251, 191, 36, 0.5);
+  color: var(--text);
+}
+ 
+/* .console et ses lignes affichent les commandes capturées ou le contenu du terminal. */
+ 
+.console {
+  max-height: 250px;
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--console-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+ 
 .console-line {
-  margin-bottom: 6px;
   display: flex;
   gap: 10px;
+  margin-bottom: 6px;
 }
-
-.muted {
-  color: #666;
-}
-
-.ip-highlight {
-  color: #64b5f6;
-}
-
+ 
 .cmd {
-  color: #fff;
+  color: var(--text);
 }

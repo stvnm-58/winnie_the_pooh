@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
 import logo from '../assets/HoneypotSwarm.png';
 import ForgotPassword from './ForgotPassword';
+import './Login.css';
 
+// Écran d'accès : création initiale de l'administrateur, connexion ou bascule vers la récupération.
 export default function Login({ onLoginSuccess }) {
   const [username, setUsername] = useState('');
   const [recoveryEmail, setRecoveryEmail] = useState('');
@@ -78,33 +80,21 @@ export default function Login({ onLoginSuccess }) {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '75vh'
-    }}>
-      <div style={{
-        backgroundColor: '#1e293b',
-        border: '1px solid #334155',
-        borderRadius: '12px',
-        padding: '35px',
-        width: '100%',
-        maxWidth: '380px',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '25px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '8px' }}>
+    // Carte de connexion centrée ; les champs de récupération n'apparaissent que pendant la configuration.
+    <div className="login-wrapper">
+      <div className="login-card">
+        <div className="login-header">
+          <div className="login-logo-container">
             <img 
               src={logo} 
               alt="Honeypot Swarm Logo" 
-              style={{ width: '42px', height: '42px', objectFit: 'contain' }} 
+              className="login-logo" 
             />
-            <h2 style={{ color: '#f8fafc', margin: 0, fontSize: '1.6rem', fontWeight: 'bold' }}>
+            <h2 className="login-title">
               Honeypot Swarm
             </h2>
           </div>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: '0.85rem' }}>
+          <p className="login-subtitle">
             {setupRequired
               ? 'Crée ton compte administrateur'
               : 'Honeypots controller'}
@@ -112,23 +102,15 @@ export default function Login({ onLoginSuccess }) {
         </div>
 
         {error && (
-          <div style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid #ef4444',
-            color: '#fca5a5',
-            padding: '10px',
-            borderRadius: '6px',
-            marginBottom: '20px',
-            fontSize: '0.85rem',
-            textAlign: 'center'
-          }}>
+          <div className="login-alert-error">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Formulaire adaptatif : setup initial ou authentification selon setupRequired. */}
+        <form onSubmit={handleSubmit} className="login-form">
           <div>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>Identifiant</label>
+            <label className="login-label">Identifiant</label>
             <input
               type="text"
               autoComplete="username"
@@ -136,22 +118,13 @@ export default function Login({ onLoginSuccess }) {
               onChange={(e) => setUsername(e.target.value)}
               placeholder="admin"
               required
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '6px',
-                border: '1px solid #334155',
-                backgroundColor: '#0f172a',
-                color: '#fff',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
+              className="login-input"
             />
           </div>
 
           {setupRequired && (
             <div>
-              <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>
+              <label className="login-label">
                 Adresse e-mail de récupération
               </label>
               <input
@@ -161,22 +134,13 @@ export default function Login({ onLoginSuccess }) {
                 onChange={(e) => setRecoveryEmail(e.target.value)}
                 placeholder="admin@example.com"
                 required
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #334155',
-                  backgroundColor: '#0f172a',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                className="login-input"
               />
             </div>
           )}
 
           <div>
-            <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>Mot de passe</label>
+            <label className="login-label">Mot de passe</label>
             <input
               type="password"
               autoComplete={setupRequired ? 'new-password' : 'current-password'}
@@ -185,22 +149,13 @@ export default function Login({ onLoginSuccess }) {
               minLength={setupRequired ? 12 : undefined}
               placeholder={setupRequired ? '12 caractères minimum' : '••••••••'}
               required
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: '6px',
-                border: '1px solid #334155',
-                backgroundColor: '#0f172a',
-                color: '#fff',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
+              className="login-input"
             />
           </div>
 
           {setupRequired && (
             <div>
-              <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>
+              <label className="login-label">
                 Confirmer le mot de passe
               </label>
               <input
@@ -210,16 +165,7 @@ export default function Login({ onLoginSuccess }) {
                 onChange={(e) => setPasswordConfirmation(e.target.value)}
                 minLength={12}
                 required
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #334155',
-                  backgroundColor: '#0f172a',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                className="login-input"
               />
             </div>
           )}
@@ -227,18 +173,7 @@ export default function Login({ onLoginSuccess }) {
           <button
             type="submit"
             disabled={loading || setupRequired === null}
-            style={{
-              marginTop: '8px',
-              padding: '11px',
-              backgroundColor: '#3b82f6',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              opacity: loading ? 0.7 : 1,
-              transition: 'background 0.2s'
-            }}
+            className="login-submit-btn"
           >
             {loading
               ? (setupRequired ? 'Création du compte...' : 'Connexion en cours...')
@@ -247,17 +182,10 @@ export default function Login({ onLoginSuccess }) {
         </form>
 
         {!setupRequired && (
-          <div style={{ textAlign: 'center', marginTop: '16px' }}>
+          <div className="login-forgot-container">
             <button
               onClick={() => setIsForgotMode(true)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#94a3b8',
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                textDecoration: 'underline'
-              }}
+              className="login-forgot-btn"
             >
               Mot de passe oublié ?
             </button>

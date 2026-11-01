@@ -7,6 +7,7 @@ import {
 } from '../attackUtils';
 import './SessionReplay.css';
 
+// Lecteur de sessions : associe les commandes à une attaque puis les affiche progressivement dans un terminal simulé.
 export default function SessionReplay({ attacks, commands, activeHoneypots, formatDate }) {
   // Gère ici la session choisie, la position de lecture et sa vitesse.
   const [selectedReplaySession, setSelectedReplaySession] = useState('');
@@ -125,31 +126,21 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
   const attackCountsByPort = useMemo(() => countAttacksByPort(attacks), [attacks]);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '20px' }}>
+    <div className="replay-grid-layout">
       
-      {/* COLONNE GAUCHE : REPLAY TERMINAL */}
+      {/* Colonne gauche : sélection de session, commandes de lecture, terminal et progression. */}
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'nowrap', gap: '15px' }}>
-          <h3 style={{ margin: 0, whiteSpace: 'nowrap' }}>
+        <div className="replay-header">
+          <h3 className="replay-title">
             Lecteur du Replay {selectedPortFilter !== 'ALL' && `- Port ${selectedPortFilter}`}
           </h3>
           
-          <div className="replay-select-container" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label style={{ fontSize: '0.9rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>Choisir une session :</label>
+          <div className="replay-select-container">
+            <label className="replay-select-label">Choisir une session :</label>
             <select 
               value={selectedReplaySession} 
               onChange={(e) => handleSessionChange(e.target.value)}
               className="replay-select"
-              style={{ 
-                backgroundColor: '#0f172a', 
-                color: '#fff', 
-                border: '1px solid #334155', 
-                padding: '6px 10px', 
-                borderRadius: '6px',
-                width: '320px',
-                maxWidth: '100%',
-                boxSizing: 'border-box'
-              }}
             >
               <option value="">-- Sélectionner une session ({filteredAttacks.length}) --</option>
               {filteredAttacks.map((att, idx) => (
@@ -162,7 +153,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
         </div>
 
         {!selectedReplaySession ? (
-          <div style={{ textAlign: 'center', padding: '50px', color: '#64748b' }}>
+          <div className="replay-empty-state">
             <p>Veuillez sélectionner une session dans le menu déroulant ci-dessus ou filtrer par honeypot à droite.</p>
           </div>
         ) : (
@@ -186,7 +177,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
               </div>
 
               <div className="replay-btn-group">
-                <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Vitesse :</span>
+                <span className="replay-speed-label">Vitesse :</span>
                 {[1, 2, 5].map(s => (
                   <button
                     key={s}
@@ -201,7 +192,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
 
             {/* Terminal interactif */}
             <div className="console replay-terminal" ref={terminalRef}>
-              <div style={{ color: '#475569', fontSize: '0.80rem', marginBottom: '15px' }}>
+              <div className="replay-terminal-system">
                 [SYSTEM] Session sélectionnée sur le port {targetAttack?.port || 2222} (IP: {targetAttack?.ip_address}) - Connexion SSH simulée rétablie...
               </div>
 
@@ -209,13 +200,13 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
                 <p className="muted">Aucune commande enregistrée pour cette session spécifique.</p>
               ) : (
                 sessionCommands.slice(0, currentReplayIndex).map((cmd, idx) => (
-                  <div key={idx} style={{ marginBottom: '14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8' }}>
-                      <span style={{ color: '#64748b' }}>root@ubuntu:~#</span>
-                      <span style={{ fontWeight: 'bold' }}>{cmd.command}</span>
+                  <div key={idx} className="replay-cmd-block">
+                    <div className="replay-cmd-line">
+                      <span className="replay-prompt">root@ubuntu:~#</span>
+                      <span className="replay-command-text">{cmd.command}</span>
                     </div>
                     {cmd.response && (
-                      <div style={{ color: '#cbd5e1', paddingLeft: '15px', marginTop: '4px', whiteSpace: 'pre-wrap', fontSize: '0.9rem', fontFamily: 'monospace' }}>
+                      <div className="replay-response-text">
                         {cmd.response}
                       </div>
                     )}
@@ -226,7 +217,7 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
 
             {/* Barre de progression */}
             <div className="replay-progress-container">
-              <span style={{ fontSize: '0.85rem', color: '#94a3b8', minWidth: '120px' }}>
+              <span className="replay-progress-label">
                 Action {currentReplayIndex} / {sessionCommands.length}
               </span>
               <input 
@@ -245,39 +236,25 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
         )}
       </div>
 
-      {/* COLONNE DROITE : PANNEAU LATÉRAL DE SÉLECTION DU HONEYPOT */}
+      {/* Panneau latéral droit : filtre tous les replays ou ceux d'un port précis. */}
       <div>
-        <div className="card" style={{ position: 'sticky', top: '20px' }}>
-          <h3 style={{ marginBottom: '15px' }}>Swarm</h3>
-          <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '15px' }}>
+        <div className="card replay-sidebar-card">
+          <h3 className="replay-sidebar-title">Swarm</h3>
+          <p className="muted replay-sidebar-subtitle">
             Sélectionnez une instance pour filtrer les replays :
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div className="replay-sidebar-list">
             {/* Bouton Vue Globale */}
             <button
               onClick={() => handlePortFilterChange('ALL')}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #334155',
-                backgroundColor: selectedPortFilter === 'ALL' ? '#3b82f6' : '#0f172a',
-                color: '#fff',
-                cursor: 'pointer',
-                fontWeight: 'bold',
-                textAlign: 'left',
-                width: '100%',
-                boxSizing: 'border-box'
-              }}
+              className={`replay-sidebar-btn ${selectedPortFilter === 'ALL' ? 'is-selected' : ''}`}
             >
-              <span>🌐 Tous les Replays</span>
-              <span style={{ fontSize: '0.85rem', opacity: 0.9, marginLeft: '10px' }}>({attacks.length})</span>
+              <span>Tous les Replays</span>
+              <span className="replay-sidebar-count">({attacks.length})</span>
             </button>
 
-            <hr style={{ border: 'none', borderTop: '1px solid #334155', margin: '5px 0' }} />
+            <hr className="replay-sidebar-divider" />
 
             {/* Liste dynamique des ports */}
             {availablePorts.map((port) => {
@@ -289,39 +266,14 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
                 <button
                   key={port}
                   onClick={() => handlePortFilterChange(String(port))}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #334155',
-                    backgroundColor: isSelected ? '#3b82f6' : '#0f172a',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    gap: '15px'
-                  }}
+                  className={`replay-sidebar-btn replay-port-btn ${isSelected ? 'is-selected' : ''}`}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                    <span style={{
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      backgroundColor: isLive ? '#22c55e' : '#64748b',
-                      flexShrink: 0
-                    }}></span>
-                    <span style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Port {port}</span>
+                  <div className="replay-port-info">
+                    <span className={`replay-status-dot ${isLive ? 'is-live' : 'is-offline'}`}></span>
+                    <span className="replay-port-label">Port {port}</span>
                   </div>
 
-                  <span style={{ 
-                    fontSize: '0.8rem', 
-                    color: isSelected ? '#ffffff' : '#94a3b8',
-                    whiteSpace: 'nowrap',
-                    marginLeft: 'auto'
-                  }}>
+                  <span className="replay-port-count">
                     {count} session{count > 1 ? 's' : ''}
                   </span>
                 </button>

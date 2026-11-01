@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../api';
+import './MeshManager.css';
 
+// Écran Mesh : déploie des écouteurs, les regroupe en essaims et gère leurs ports/arrêts.
 export default function MeshManager() {
   const [honeypots, setHoneypots] = useState([]);
   const [portInput, setPortInput] = useState('');
@@ -230,7 +232,6 @@ export default function MeshManager() {
         method: 'DELETE'
       });
       if (!stopRes.ok) {
-        // Si l'ancien honeypot ne s'arrête pas, tente d'annuler le nouveau déploiement.
         const stopData = await stopRes.json();
         let rollbackMessage;
         try {
@@ -270,14 +271,14 @@ export default function MeshManager() {
   return (
     <div className="card">
       <div className="card-header-flex">
-        <h3 style={{ fontSize: '1.8rem', color: '#f8fafc', margin: 0 }}>Swarm</h3>
+        <h3 className="mesh-main-title">Swarm</h3>
       </div>
-      <p className="muted" style={{ marginBottom: '20px' }}>
+      <p className="muted mesh-intro">
         Déployez et pilotez vos faux serveurs SSH sur différents ports pour noyer les attaquants dans un essaim de pièges.
       </p>
 
-      {/* Déploiement unitaire */}
-      <form onSubmit={handleDeploy} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap' }}>
+      {/* En haut : déploiement d'une instance sur un port explicite. */}
+      <form onSubmit={handleDeploy} className="mesh-form-row">
         <input 
           type="number" 
           min="1"
@@ -287,125 +288,126 @@ export default function MeshManager() {
           placeholder="Ex: 2223" 
           value={portInput} 
           onChange={(e) => setPortInput(e.target.value)}
-          style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '8px 12px', borderRadius: '6px', width: '150px' }}
+          className="mesh-input"
         />
         <button 
           type="submit" 
           disabled={loading}
-          style={{ backgroundColor: '#3b82f6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          className="mesh-btn-primary"
         >
           {loading ? 'Déploiement...' : 'Déployer un nouveau honeypot'}
         </button>
-        {errorMsg && <span style={{ color: '#fca5a5', fontSize: '0.85rem' }}>{errorMsg}</span>}
+        {errorMsg && <span className="mesh-error-msg">{errorMsg}</span>}
       </form>
 
-      {/* Déploiement en essaim (Swarm aléatoire) */}
-      <form onSubmit={handleDeploySwarm} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
-        <span style={{ fontSize: '0.9rem', color: '#38bdf8', fontWeight: 'bold' }}>Essaim aléatoire :</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nombre de Honeypots (max 10) :</label>
+      {/* Essaim aléatoire : nombre d'instances et plage de ports à utiliser. */}
+      <form onSubmit={handleDeploySwarm} className="mesh-panel">
+        <span className="mesh-panel-title-green">Essaim aléatoire :</span>
+        <div className="mesh-field-group">
+          <label className="mesh-label">Nombre de Honeypots (max 10) :</label>
           <input 
             type="number" 
             min="1" max="10"
             value={swarmCount} 
             onChange={(e) => setSwarmCount(e.target.value)}
-            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '70px' }}
+            className="mesh-input-small"
           />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Port de départ :</label>
+        <div className="mesh-field-group">
+          <label className="mesh-label">Port de départ :</label>
           <input 
             type="number" 
             min="1" max="65535"
             value={swarmMin} 
             onChange={(e) => setSwarmMin(e.target.value)}
-            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '90px' }}
+            className="mesh-input-medium"
           />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Port de fin :</label>
+        <div className="mesh-field-group">
+          <label className="mesh-label">Port de fin :</label>
           <input 
             type="number" 
             min="1" max="65535"
             value={swarmMax} 
             onChange={(e) => setSwarmMax(e.target.value)}
-            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '90px' }}
+            className="mesh-input-medium"
           />
         </div>
         <button 
           type="submit" 
           disabled={swarmLoading}
-          style={{ backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          className="mesh-btn-green"
         >
           {swarmLoading ? 'Génération...' : 'Générer'}
         </button>
-        {swarmErrorMsg && <span style={{ color: '#fca5a5', fontSize: '0.85rem', width: '100%' }}>{swarmErrorMsg}</span>}
+        {swarmErrorMsg && <span className="mesh-error-msg full-width">{swarmErrorMsg}</span>}
       </form>
 
-      {/* Déploiement autour d'un port de référence */}
-      <form onSubmit={handleDeployReference} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '25px', flexWrap: 'wrap', backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', border: '1px solid #334155' }}>
-        <span style={{ fontSize: '0.9rem', color: '#a855f7', fontWeight: 'bold' }}>Essaim autour d'un service :</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Nombre de Honeypots (max 10) :</label>
+      {/* Essaim de leurres autour d'un port de service de référence. */}
+      <form onSubmit={handleDeployReference} className="mesh-panel">
+        <span className="mesh-panel-title-purple">Essaim autour d'un service :</span>
+        <div className="mesh-field-group">
+          <label className="mesh-label">Nombre de Honeypots (max 10) :</label>
           <input 
             type="number" 
             min="1" max="10"
             value={refCount} 
             onChange={(e) => setRefCount(e.target.value)}
-            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '70px' }}
+            className="mesh-input-small"
           />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Port de référence :</label>
+        <div className="mesh-field-group">
+          <label className="mesh-label">Port de référence :</label>
           <input 
             type="number" 
             min="1" max="65535"
             value={refPort} 
             onChange={(e) => setRefPort(e.target.value)}
-            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '6px 8px', borderRadius: '6px', width: '90px' }}
+            className="mesh-input-medium"
           />
         </div>
         <button 
           type="submit" 
           disabled={refLoading}
-          style={{ backgroundColor: '#8b5cf6', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          className="mesh-btn-purple"
         >
           {refLoading ? 'Génération...' : 'Générer'}
         </button>
-        {refErrorMsg && <span style={{ color: '#fca5a5', fontSize: '0.85rem', width: '100%' }}>{refErrorMsg}</span>}
+        {refErrorMsg && <span className="mesh-error-msg full-width">{refErrorMsg}</span>}
       </form>
 
+      {/* Zone inférieure : cartes des processus actifs, ouverture du dashboard, arrêt et édition du port. */}
       <h4>Instances de Honeypots Actives ({honeypots.length})</h4>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '15px', marginTop: '15px' }}>
+      <div className="mesh-grid">
         {honeypots.length === 0 ? (
           <p className="muted">Aucun honeypot actif pour le moment.</p>
         ) : (
           honeypots.map((h) => (
-            <div key={h.pid} style={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px', padding: '15px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div key={h.pid} className="mesh-honeypot-card">
               
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div className="mesh-card-top">
                 <div 
                   onClick={() => handleOpenDashboard(h.port)}
-                  style={{ cursor: 'pointer', flex: 1 }}
+                  className="mesh-card-clickable"
                   title="Cliquer pour ouvrir le dashboard sur ce port"
                 >
-                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#38bdf8' }}>Port : {h.port}</div>
-                  <div className="muted" style={{ fontSize: '0.8rem' }}>PID Processus : {h.pid}</div>
-                  <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop: '6px' }}>Ouvrir le dashboard →</div>
+                  <div className="mesh-port-title">Port : {h.port}</div>
+                  <div className="muted mesh-pid">PID Processus : {h.pid}</div>
+                  <div className="mesh-open-link">Ouvrir le dashboard →</div>
                 </div>
 
                 <button 
                   onClick={() => handleStop(h.port)}
-                  style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                  className="mesh-btn-stop"
                 >
                   Stopper ✕
                 </button>
               </div>
 
               {/* Section pour changer le port à la volée dans la carte */}
-              <div style={{ borderTop: '1px solid #1e293b', paddingTop: '10px' }}>
+              <div className="mesh-edit-section">
                 {editingPort === h.port ? (
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <div className="mesh-edit-row">
                     <input 
                       type="number"
                       min="1"
@@ -413,17 +415,17 @@ export default function MeshManager() {
                       value={newPortInput}
                       onChange={(e) => setNewPortInput(e.target.value)}
                       placeholder="Nouveau port"
-                      style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: '#fff', padding: '4px 8px', borderRadius: '4px', width: '100px', fontSize: '0.85rem' }}
+                      className="mesh-edit-input"
                     />
                     <button 
                       onClick={() => handleUpdatePort(h.port)}
-                      style={{ backgroundColor: '#22c55e', color: '#fff', border: 'none', padding: '5px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                      className="mesh-btn-validate"
                     >
                       Valider
                     </button>
                     <button 
                       onClick={() => setEditingPort(null)}
-                      style={{ backgroundColor: '#64748b', color: '#fff', border: 'none', padding: '5px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}
+                      className="mesh-btn-cancel"
                     >
                       ✕
                     </button>
@@ -431,13 +433,13 @@ export default function MeshManager() {
                 ) : (
                   <button 
                     onClick={() => { setEditingPort(h.port); setNewPortInput(String(h.port)); setEditError(''); }}
-                    style={{ background: 'transparent', border: 'none', color: '#38bdf8', padding: 0, fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}
+                    className="mesh-edit-trigger"
                   >
                     Modifier le port à la volée ⚙️
                   </button>
                 )}
                 {editingPort === h.port && editError && (
-                  <div style={{ color: '#fca5a5', fontSize: '0.75rem', marginTop: '4px' }}>{editError}</div>
+                  <div className="mesh-edit-error">{editError}</div>
                 )}
               </div>
 

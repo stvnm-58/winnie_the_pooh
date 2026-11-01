@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../api';
 import useBannedIps from '../hooks/useBannedIps';
+import './FirewallManager.css';
 
+// Écran Pare-feu : configuration auto-ban, surveillance des tentatives et liste des IP bloquées.
 export default function FirewallManager() {
   const { bannedIps, refreshBannedIps: fetchBannedIps } = useBannedIps();
   const [inputIp, setInputIp] = useState('');
@@ -10,14 +12,11 @@ export default function FirewallManager() {
   const [autoBanStats, setAutoBanStats] = useState({});
   const [activeAttempts, setActiveAttempts] = useState({});
 
-  // États pour la configuration dynamique de l'auto-ban
   const [autoBanConfig, setAutoBanConfig] = useState({ enabled: true, window: 15, max_attempts: 15 });
   const [configLoading, setConfigLoading] = useState(false);
-  
-  // État pour savoir si l'utilisateur est en train de modifier les inputs numériques (évite l'écrasement par le polling)
   const [isEditingConfig, setIsEditingConfig] = useState(false);
 
-  // Recharge les compteurs d'auto-ban, les tentatives actives et la configuration.
+  // Actualise les statistiques, tentatives récentes et paramètres de blocage automatique.
   const fetchFirewallData = async () => {
     try {
       const resStats = await apiFetch('/autoban-stats');
@@ -32,7 +31,6 @@ export default function FirewallManager() {
         setActiveAttempts(data.active_attempts || {});
       }
 
-      // On ne met à jour la config depuis le serveur que si l'utilisateur n'est pas en train de taper dedans
       const resConfig = await apiFetch('/autoban-config');
       if (resConfig.ok) {
         const data = await resConfig.json();
@@ -45,7 +43,6 @@ export default function FirewallManager() {
     }
   };
 
-  // Actualise les données du pare-feu et arrête les minuteries au démontage.
   useEffect(() => {
     const initialFetch = setTimeout(fetchFirewallData, 0);
     const interval = setInterval(fetchFirewallData, 3000);
@@ -55,11 +52,10 @@ export default function FirewallManager() {
     };
   }, [isEditingConfig]);
 
-  // Applique immédiatement les changements, puis synchronise la configuration avec l'API.
   const handleUpdateConfig = async (newFields) => {
     setConfigLoading(true);
     const updated = { ...autoBanConfig, ...newFields };
-    setAutoBanConfig(updated); // Mise à jour locale immédiate
+    setAutoBanConfig(updated);
 
     try {
       const res = await apiFetch('/autoban-config', {
@@ -79,7 +75,6 @@ export default function FirewallManager() {
     }
   };
 
-  // Bannit l'adresse saisie puis recharge les données du pare-feu.
   const handleManualBan = async (e) => {
     e.preventDefault();
     if (!inputIp.trim()) return;
@@ -107,7 +102,6 @@ export default function FirewallManager() {
     }
   };
 
-  // Débannit l'adresse et recharge les listes des bannissements et des tentatives.
   const handleUnban = async (ipAddress) => {
     try {
       const res = await apiFetch('/unban', {
@@ -132,25 +126,25 @@ export default function FirewallManager() {
       <div className="card-header-flex">
         <h3>🛡️ Gestion du Pare-feu (IPs Bloquées & Surveillance)</h3>
       </div>
-      <p className="muted" style={{ marginBottom: '20px' }}>
+      <p className="muted firewall-intro">
         Visualisez et gérez l'ensemble des adresses IP bloquées au niveau système et configurez les règles d'auto-défense en temps réel.
       </p>
 
-      {/* Panneau de configuration dynamique de l'Auto-Ban */}
-      <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '15px', marginBottom: '25px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '0.9rem', color: '#f8fafc', fontWeight: 'bold' }}>Auto-Ban (Anti-Flood) :</span>
+      {/* Bandeau supérieur : activation de l'auto-ban, seuil et fenêtre de détection. */}
+      <div className="firewall-panel">
+        <div className="firewall-config-group">
+          <span className="firewall-label-bold">Auto-Ban (Anti-Flood) :</span>
           <button 
             onClick={() => handleUpdateConfig({ enabled: !autoBanConfig.enabled })}
             disabled={configLoading}
-            style={{ backgroundColor: autoBanConfig.enabled ? '#22c55e' : '#64748b', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+            className={`btn-autoban-toggle ${autoBanConfig.enabled ? 'is-enabled' : 'is-disabled'}`}
           >
             {autoBanConfig.enabled ? 'Activé ✓' : 'Désactivé ✕'}
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Essais max :</label>
+        <div className="firewall-input-group">
+          <label className="firewall-label-sub">Essais max :</label>
           <input 
             type="number" 
             min="1" max="100"
@@ -158,12 +152,12 @@ export default function FirewallManager() {
             onFocus={() => setIsEditingConfig(true)}
             onChange={(e) => setAutoBanConfig({ ...autoBanConfig, max_attempts: e.target.value })}
             onBlur={(e) => handleUpdateConfig({ max_attempts: Number(e.target.value) })}
-            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '4px 8px', borderRadius: '4px', width: '60px', textAlign: 'center' }}
+            className="firewall-number-input"
           />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Fenêtre (secondes) :</label>
+        <div className="firewall-input-group">
+          <label className="firewall-label-sub">Fenêtre (secondes) :</label>
           <input 
             type="number" 
             min="1" max="300"
@@ -171,24 +165,24 @@ export default function FirewallManager() {
             onFocus={() => setIsEditingConfig(true)}
             onChange={(e) => setAutoBanConfig({ ...autoBanConfig, window: e.target.value })}
             onBlur={(e) => handleUpdateConfig({ window: Number(e.target.value) })}
-            style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '4px 8px', borderRadius: '4px', width: '60px', textAlign: 'center' }}
+            className="firewall-number-input"
           />
         </div>
       </div>
 
-      {/* Encadré de surveillance en temps réel */}
-      <div style={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', padding: '15px', marginBottom: '25px' }}>
-        <h4 style={{ margin: '0 0 10px 0', fontSize: '1rem', color: '#38bdf8' }}>⚡ Surveillance du trafic suspect (Rate-limiting en cours)</h4>
+      {/* Panneau de surveillance : affiche les IP proches du seuil ou l'état vide/désactivé. */}
+      <div className="firewall-panel">
+        <h4 className="firewall-surveillance-title">⚡ Surveillance du trafic suspect (Rate-limiting en cours)</h4>
         {!autoBanConfig.enabled ? (
-          <p className="muted" style={{ margin: 0, fontSize: '0.85rem', color: '#fca5a5' }}>L'auto-ban est actuellement désactivé.</p>
+          <p className="muted firewall-alert-text">L'auto-ban est actuellement désactivé.</p>
         ) : Object.keys(activeAttempts).length === 0 ? (
-          <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Aucune tentative rapprochée détectée pour le moment.</p>
+          <p className="muted firewall-empty-text">Aucune tentative rapprochée détectée pour le moment.</p>
         ) : (
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <div className="attempts-flex-container">
             {Object.entries(activeAttempts).map(([ip, count], idx) => (
-              <div key={idx} style={{ backgroundColor: '#0f172a', border: '1px solid #475569', borderRadius: '6px', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontFamily: 'monospace', color: '#f87171', fontWeight: 'bold' }}>{ip}</span>
-                <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem' }}>
+              <div key={idx} className="attempt-badge-card">
+                <span className="attempt-ip">{ip}</span>
+                <span className="attempt-count-pill">
                   {count} / {autoBanConfig.max_attempts} essais
                 </span>
               </div>
@@ -197,38 +191,39 @@ export default function FirewallManager() {
         )}
       </div>
 
-      {/* Formulaire de bannissement manuel */}
-      <form onSubmit={handleManualBan} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '25px', flexWrap: 'wrap' }}>
+      {/* Formulaire d'ajout manuel d'une adresse IP au pare-feu système. */}
+      <form onSubmit={handleManualBan} className="manual-ban-form">
         <input 
           type="text" 
           required
           placeholder="Ex: 192.168.1.50" 
           value={inputIp} 
           onChange={(e) => setInputIp(e.target.value)}
-          style={{ backgroundColor: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '8px 12px', borderRadius: '6px', width: '200px' }}
+          className="manual-ip-input"
         />
         <button 
           type="submit" 
           disabled={loading}
-          style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+          className="btn-manual-ban"
         >
           {loading ? 'Traitement...' : 'Bannir manuellement cette IP 🚫'}
         </button>
-        {errorMsg && <span style={{ color: '#fca5a5', fontSize: '0.85rem' }}>{errorMsg}</span>}
+        {errorMsg && <span className="firewall-error-msg">{errorMsg}</span>}
       </form>
 
+      {/* Tableau inférieur : type de bannissement, tentatives et action de débannissement. */}
       <h4>Liste des IP Bloquées ({bannedIps.length})</h4>
-      <div style={{ marginTop: '15px' }}>
+      <div className="banned-table-container">
         {bannedIps.length === 0 ? (
           <p className="muted">Aucune adresse IP n'est actuellement bannie par le système.</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <table className="cyber-table">
             <thead>
-              <tr style={{ borderBottom: '1px solid #334155', textAlign: 'left' }}>
-                <th style={{ padding: '10px', color: '#94a3b8' }}>Adresse IP</th>
-                <th style={{ padding: '10px', color: '#94a3b8' }}>Type de blocage</th>
-                <th style={{ padding: '10px', color: '#94a3b8' }}>Tentatives enregistrées</th>
-                <th style={{ padding: '10px', color: '#94a3b8', textAlign: 'right' }}>Actions</th>
+              <tr>
+                <th>Adresse IP</th>
+                <th>Type de blocage</th>
+                <th>Tentatives enregistrées</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -237,28 +232,28 @@ export default function FirewallManager() {
                 const attemptsCount = autoBanStats[ip];
                 
                 return (
-                  <tr key={idx} style={{ borderBottom: '1px solid #1e293b' }}>
-                    <td style={{ padding: '12px 10px', fontFamily: 'monospace', color: '#fca5a5', fontWeight: 'bold' }}>
+                  <tr key={idx}>
+                    <td className="cell-ip-banned">
                       {ip}
                     </td>
-                    <td style={{ padding: '12px 10px' }}>
+                    <td>
                       {isAutoBanned ? (
-                        <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                        <span className="badge-autobanned">
                           ⚡ Auto-banni (DDoS/Flood)
                         </span>
                       ) : (
-                        <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                        <span className="badge-manual">
                           🛡️ Manuel
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '12px 10px', color: '#cbd5e1', fontSize: '0.9rem' }}>
+                    <td className="cell-attempts-text">
                       {isAutoBanned ? `${attemptsCount} tentatives` : <span className="muted">-</span>}
                     </td>
-                    <td style={{ padding: '12px 10px', textAlign: 'right' }}>
+                    <td className="text-right">
                       <button 
                         onClick={() => handleUnban(ip)}
-                        style={{ backgroundColor: '#22c55e', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                        className="btn-unban"
                       >
                         Débannir 🛡️
                       </button>

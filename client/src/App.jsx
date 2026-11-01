@@ -10,6 +10,7 @@ import { apiFetch } from './api';
 import logo from './assets/HoneypotSwarm.png';
 import './App.css';
 
+// Chargement initial et actualisation incrémentale des événements par pages API.
 const API_PAGE_SIZE = 500;
 
 // Récupère une ressource JSON et remonte les erreurs HTTP à la boucle de mise à jour.
@@ -77,7 +78,7 @@ function applyCountryUpdates(attacks, updates) {
 }
 
 function App() {
-  // Centralise l'authentification, les données du tableau de bord et l'état des pages.
+  // Orchestration globale : session, événements partagés entre les pages et état du honeypot.
   const isPasswordResetFlow = new URLSearchParams(window.location.search).has('token');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(!isPasswordResetFlow);
@@ -161,7 +162,7 @@ function App() {
     };
   }, [isPasswordResetFlow]);
 
-  // Actualise les données uniquement si l'utilisateur est connecté et annule les requêtes au départ.
+  // Synchronisation périodique des données partagées ; les requêtes sont annulées à la déconnexion.
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -259,6 +260,7 @@ function App() {
     };
   }, [isAuthenticated, handleLogout]);
 
+  // Écrans avant authentification : attente de la session puis formulaire de connexion/configuration.
   if (isCheckingSession) return null;
 
   if (!isAuthenticated) {
@@ -314,60 +316,47 @@ function App() {
     ));
   };
 
-  // Adapte l'apparence du lien de navigation à son état actif.
-  const navLinkStyle = ({ isActive }) => ({
-    backgroundColor: isActive ? '#3b82f6' : 'transparent',
-    color: '#fff',
-    textDecoration: 'none',
-    padding: '6px 14px',
-    borderRadius: '6px',
-    fontSize: '0.9rem',
-    fontWeight: 'bold'
-  });
-
+  // Coquille authentifiée commune : en-tête, navigation, horloge et routes de chaque écran.
   return (
     <Router>
       <div className="container">
-        <div className="top-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', flexWrap: 'wrap', gap: '15px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="top-header app-top-header">
+          <div className="app-header-left">
+            <div className="app-logo-title-wrap">
               <img 
                 src={logo} 
                 alt="Honeypot Swarm Logo" 
-                style={{ width: '32px', height: '32px', objectFit: 'contain' }} 
+                className="app-logo" 
               />
-              <h1 style={{ margin: 0, fontSize: '1.8rem', color: '#f8fafc', fontWeight: 'bold' }}>
+              <h1 className="app-main-title">
                 Honeypot Swarm Dashboard
               </h1>
             </div>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#1e293b', padding: '6px 12px', borderRadius: '20px', border: '1px solid #334155' }}>
-              <span style={{
-                width: '10px', height: '10px', borderRadius: '50%',
-                backgroundColor: activeHoneypots.length > 0 ? '#22c55e' : '#ef4444',
-                boxShadow: activeHoneypots.length > 0 ? '0 0 8px #22c55e' : '0 0 8px #ef4444',
-                display: 'inline-block'
-              }}></span>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: '500' }}>
+            {/* Indicateur d'état global des processus honeypot détectés. */}
+            <div className={`app-status-pill ${activeHoneypots.length > 0 ? 'is-active' : 'is-inactive'}`}>
+              <span className={`app-status-dot ${activeHoneypots.length > 0 ? 'is-active' : 'is-inactive'}`}></span>
+              <span className="app-status-text">
                 {activeHoneypots.length > 0 ? `${activeHoneypots.length} actif(s)` : 'Inactif'}
               </span>
             </div>
 
-            <nav style={{ display: 'flex', backgroundColor: '#1e293b', padding: '4px', borderRadius: '8px', border: '1px solid #334155', gap: '5px' }}>
-              <NavLink to="/" style={navLinkStyle}>Tableau de bord</NavLink>
-              <NavLink to="/mesh" style={navLinkStyle}>Swarm Controller</NavLink>
-              <NavLink to="/replay" style={navLinkStyle}>Replay</NavLink>
-              <NavLink to="/firewall" style={navLinkStyle}>Pare-feu 🛡️</NavLink>
-              <NavLink to="/account" style={navLinkStyle}>Compte</NavLink>
+            {/* Navigation vers les vues de surveillance, de gestion et de compte. */}
+            <nav className="app-nav">
+              <NavLink to="/" className={({ isActive }) => `app-nav-link ${isActive ? 'is-active' : ''}`}>Tableau de bord</NavLink>
+              <NavLink to="/mesh" className={({ isActive }) => `app-nav-link ${isActive ? 'is-active' : ''}`}>Swarm Controller</NavLink>
+              <NavLink to="/replay" className={({ isActive }) => `app-nav-link ${isActive ? 'is-active' : ''}`}>Replay</NavLink>
+              <NavLink to="/firewall" className={({ isActive }) => `app-nav-link ${isActive ? 'is-active' : ''}`}>Pare-feu</NavLink>
+              <NavLink to="/account" className={({ isActive }) => `app-nav-link ${isActive ? 'is-active' : ''}`}>Compte</NavLink>
             </nav>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <div className="live-clock" style={{ backgroundColor: '#1e293b', padding: '10px 18px', borderRadius: '8px', fontFamily: 'monospace', textAlign: 'right', border: '1px solid #334155' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#38bdf8' }}>
+          <div className="app-header-right">
+            <div className="live-clock app-clock-box">
+              <div className="app-clock-time">
                 {currentTime.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris' })}
               </div>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8', textTransform: 'capitalize' }}>
+              <div className="app-clock-date">
                 {currentTime.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </div>
             </div>
@@ -375,22 +364,14 @@ function App() {
             <button
               onClick={handleLogout}
               title="Se déconnecter"
-              style={{
-                backgroundColor: '#ef4444',
-                color: '#fff',
-                border: 'none',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                fontSize: '0.85rem'
-              }}
+              className="app-logout-btn"
             >
               Déconnexion
             </button>
           </div>
         </div>
 
+        {/* Zone de contenu : la route active affiche une page sous l'en-tête partagé. */}
         <Routes>
           <Route 
             path="/" 

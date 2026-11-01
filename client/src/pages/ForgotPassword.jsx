@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { forgotPassword, resetPassword } from '../api';
 import logo from '../assets/HoneypotSwarm.png';
+import './ForgotPassword.css';
 
+// Écran de récupération : affiche la demande d'e-mail ou le formulaire de nouveau mot de passe selon le jeton URL.
 export default function ForgotPassword({ onBackToLogin }) {
   // Récupérer le token s'il est présent dans l'URL (?token=XYZ)
   const urlParams = new URLSearchParams(window.location.search);
@@ -64,68 +66,39 @@ export default function ForgotPassword({ onBackToLogin }) {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '75vh'
-    }}>
-      <div style={{
-        backgroundColor: '#1e293b',
-        border: '1px solid #334155',
-        borderRadius: '12px',
-        padding: '35px',
-        width: '100%',
-        maxWidth: '380px',
-        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '25px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '8px' }}>
-            <img src={logo} alt="Logo" style={{ width: '42px', height: '42px', objectFit: 'contain' }} />
-            <h2 style={{ color: '#f8fafc', margin: 0, fontSize: '1.6rem', fontWeight: 'bold' }}>
+    // Carte centrée commune aux deux étapes de récupération du compte.
+    <div className="forgot-wrapper">
+      <div className="forgot-card">
+        <div className="forgot-header">
+          <div className="forgot-logo-container">
+            <img src={logo} alt="Logo" className="forgot-logo" />
+            <h2 className="forgot-title">
               Honeypot Swarm
             </h2>
           </div>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: '0.85rem' }}>
+          <p className="forgot-subtitle">
             {tokenFromUrl ? 'Nouveau mot de passe' : 'Récupération de compte'}
           </p>
         </div>
 
         {error && (
-          <div style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid #ef4444',
-            color: '#fca5a5',
-            padding: '10px',
-            borderRadius: '6px',
-            marginBottom: '20px',
-            fontSize: '0.85rem',
-            textAlign: 'center'
-          }}>
+          <div className="forgot-alert-error">
             {error}
           </div>
         )}
 
         {statusMessage && (
-          <div style={{
-            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-            border: '1px solid #22c55e',
-            color: '#86efac',
-            padding: '10px',
-            borderRadius: '6px',
-            marginBottom: '20px',
-            fontSize: '0.85rem',
-            textAlign: 'center'
-          }}>
+          <div className="forgot-alert-success">
             {statusMessage}
           </div>
         )}
 
+        {/* Sans jeton : demander un lien ; avec jeton : choisir et confirmer le nouveau mot de passe. */}
         {!tokenFromUrl ? (
           // Formulaire de demande (Forgot Password)
-          <form onSubmit={handleForgotSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <form onSubmit={handleForgotSubmit} className="forgot-form">
             <div>
-              <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>
+              <label className="forgot-label">
                 Identifiant
               </label>
               <input
@@ -135,42 +108,23 @@ export default function ForgotPassword({ onBackToLogin }) {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="admin"
                 required
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #334155',
-                  backgroundColor: '#0f172a',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                className="forgot-input"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              style={{
-                marginTop: '8px',
-                padding: '11px',
-                backgroundColor: '#3b82f6',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                opacity: loading ? 0.7 : 1
-              }}
+              className="forgot-submit-btn"
             >
               {loading ? 'Envoi en cours...' : 'Envoyer le lien de réinitialisation'}
             </button>
           </form>
         ) : (
           // Formulaire de saisie du nouveau mot de passe (Reset Password)
-          <form onSubmit={handleResetSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <form onSubmit={handleResetSubmit} className="forgot-form">
             <div>
-              <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>
+              <label className="forgot-label">
                 Nouveau mot de passe (12 car. min)
               </label>
               <input
@@ -179,21 +133,12 @@ export default function ForgotPassword({ onBackToLogin }) {
                 onChange={(e) => setNewPassword(e.target.value)}
                 minLength={12}
                 required
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #334155',
-                  backgroundColor: '#0f172a',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                className="forgot-input"
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.8rem', marginBottom: '6px' }}>
+              <label className="forgot-label">
                 Confirmer le nouveau mot de passe
               </label>
               <input
@@ -202,50 +147,24 @@ export default function ForgotPassword({ onBackToLogin }) {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 minLength={12}
                 required
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #334155',
-                  backgroundColor: '#0f172a',
-                  color: '#fff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
+                className="forgot-input"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              style={{
-                marginTop: '8px',
-                padding: '11px',
-                backgroundColor: '#3b82f6',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                opacity: loading ? 0.7 : 1
-              }}
+              className="forgot-submit-btn"
             >
               {loading ? 'Mise à jour...' : 'Réinitialiser le mot de passe'}
             </button>
           </form>
         )}
 
-        <div style={{ textAlign: 'center', marginTop: '20px' }}>
+        <div className="forgot-footer">
           <button
             onClick={onBackToLogin}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#3b82f6',
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              textDecoration: 'underline'
-            }}
+            className="forgot-back-btn"
           >
             Retour à la connexion
           </button>

@@ -1,0 +1,158 @@
+/* Écran d'accès : carte centrée pour la connexion et la création initiale du compte administrateur. */
+.login-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+}
+ 
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 36px 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.6);
+}
+ 
+/* Identité visuelle de la carte : logo, titre et texte qui distingue setup et connexion. */
+ 
+.login-header {
+  margin-bottom: 28px;
+  text-align: center;
+}
+ 
+.login-logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+ 
+.login-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: contain;
+}
+ 
+.login-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+ 
+.login-subtitle {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+ 
+/* Erreur d'authentification ou de configuration, placée entre l'en-tête et le formulaire. */
+ 
+.login-alert-error {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  background: var(--danger-soft);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  border-radius: var(--radius-md);
+  color: var(--danger-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+ 
+/* Champs contrôlés et bouton principal du formulaire d'accès. */
+ 
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+ 
+.login-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+ 
+.login-input {
+  display: block;
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  background: var(--surface-3);
+  border: 1px solid rgba(168, 162, 158, 0.25);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font: 400 15px var(--font);
+  transition: border-color 0.15s ease;
+}
+ 
+.login-input::placeholder {
+  color: var(--muted);
+}
+ 
+.login-input:focus {
+  border-color: var(--accent);
+}
+ 
+.login-submit-btn {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 4px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--accent-ink);
+  font: 700 15px var(--font);
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+ 
+.login-submit-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+ 
+.login-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+ 
+/* Action secondaire sous le formulaire, visible en mode connexion. */
+ 
+.login-forgot-container {
+  margin-top: 16px;
+  text-align: center;
+}
+ 
+.login-forgot-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font: 500 14px var(--font);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+ 
+.login-forgot-btn:hover {
+  color: var(--accent);
+}
+ 
+@media (max-width: 480px) {
+  .login-card {
+    padding: 28px 20px;
+  }
+}

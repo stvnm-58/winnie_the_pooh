@@ -1,108 +1,381 @@
+/* Lecteur de session : contenu/terminal à gauche, filtre Swarm des sessions à droite. */
+.replay-grid-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+}
+ 
+.replay-grid-layout > div,
+.replay-grid-layout > .card {
+  min-width: 0;
+}
+ 
+.replay-grid-layout > .card,
+.replay-sidebar-card {
+  margin-bottom: 0;
+}
+ 
+@media (max-width: 1100px) {
+  .replay-grid-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Le filtre Swarm passe au-dessus du lecteur qu'il filtre */
+  .replay-grid-layout > div:last-child {
+    order: -1;
+  }
+  .replay-sidebar-card {
+    position: static;
+  }
+}
+ 
+/* Début de la colonne gauche : titre, sélecteur de session et message d'état vide. */
+ 
 .replay-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 15px;
+  gap: 16px;
+  margin-bottom: 24px;
 }
-
+ 
+.replay-header h3 {
+  margin: 0;
+}
+ 
+.replay-title {
+  white-space: nowrap;
+}
+ 
 .replay-select-container {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
 }
-
+ 
+.replay-select-label {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+ 
 .replay-select {
-  background-color: #0f172a;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #334155;
+  width: 380px;
+  max-width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  background: var(--surface-3);
+  border: 1px solid rgba(168, 162, 158, 0.25);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font: 400 14px var(--font);
   cursor: pointer;
 }
-
+ 
+.replay-select:focus {
+  border-color: var(--accent);
+}
+ 
+.replay-empty-state {
+  padding: 56px 24px;
+  border: 1px dashed rgba(168, 162, 158, 0.25);
+  border-radius: 16px;
+  color: var(--muted);
+  text-align: center;
+}
+ 
+.replay-empty-state p {
+  max-width: 52ch;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+ 
+/* Barre de commande : lecture/pause, remise à zéro et choix de vitesse. */
+ 
 .replay-controls {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  background-color: #0f172a;
-  padding: 12px 20px;
-  border-radius: 8px;
-  border: 1px solid #334155;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 15px;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 14px 20px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 16px;
 }
-
+ 
 .replay-btn-group {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
-.btn-play {
-  color: #fff;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
+ 
+.replay-speed-label {
+  font-size: 13px;
+  color: var(--muted);
 }
-
-.btn-play.playing {
-  background-color: #ef4444;
-}
-
-.btn-play.paused {
-  background-color: #22c55e;
-}
-
+ 
+.btn-play,
 .btn-reset-replay {
-  background-color: #334155;
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 6px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  font: 600 14px var(--font);
   cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-
+ 
+/* Lecture en cours : bouton Pause en ambre ; à l'arrêt : bouton Lecture en vert */
+.btn-play.playing {
+  background: var(--accent-soft);
+  border-color: rgba(251, 191, 36, 0.5);
+  color: var(--accent);
+}
+ 
+.btn-play.playing:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+ 
+.btn-play.paused {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.45);
+  color: var(--live-text);
+}
+ 
+.btn-play.paused:hover {
+  background: var(--live);
+  color: #04130c;
+}
+ 
+.btn-reset-replay {
+  background: var(--surface-2);
+  border-color: rgba(168, 162, 158, 0.3);
+  color: var(--text-2);
+  font-weight: 500;
+}
+ 
+.btn-reset-replay:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+ 
 .speed-btn {
-  color: #fff;
-  border: none;
-  padding: 5px 10px;
-  border-radius: 4px;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: 600 13px var(--mono);
   cursor: pointer;
-  font-size: 0.85rem;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-
+ 
 .speed-btn.active {
-  background-color: #3b82f6;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
-
+ 
 .speed-btn.inactive {
-  background-color: #334155;
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--muted);
 }
-
-.replay-terminal {
-  height: 450px;
-  overflow-y: auto;
-  background-color: #020617;
+ 
+.speed-btn.inactive:hover {
+  border-color: rgba(251, 191, 36, 0.5);
+  color: var(--text);
+}
+ 
+/* Terminal central : invite, commande et réponse de chaque action rejouée. */
+ 
+/* .console (index.css) plafonne la hauteur : on la lève pour le lecteur */
+.console.replay-terminal {
+  height: clamp(280px, 50vh, 460px);
+  max-height: none;
   padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #1e293b;
-  font-family: monospace;
 }
-
+ 
+.replay-terminal-system {
+  margin-bottom: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+ 
+.replay-cmd-block {
+  margin-bottom: 14px;
+}
+ 
+.replay-cmd-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+ 
+.replay-prompt {
+  color: var(--accent);
+}
+ 
+.replay-command-text {
+  font-weight: 600;
+  color: var(--text);
+}
+ 
+.replay-response-text {
+  margin-top: 4px;
+  padding-left: 16px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+ 
+/* Curseur et compteur sous le terminal pour avancer directement dans la session. */
+ 
 .replay-progress-container {
-  margin-top: 20px;
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 12px 20px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 16px;
 }
-
+ 
+.replay-progress-label {
+  min-width: 130px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+ 
 .replay-progress-bar {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
   cursor: pointer;
-  accent-color: #3b82f6;
+}
+ 
+/* Panneau latéral droit : filtre global/par port, nombre de sessions et indicateur actif. */
+ 
+.replay-sidebar-card {
+  position: sticky;
+  top: 24px;
+}
+ 
+.replay-sidebar-title {
+  margin: 0 0 8px;
+}
+ 
+.replay-sidebar-subtitle {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+ 
+.replay-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+ 
+.replay-sidebar-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font: 600 14px var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+ 
+.replay-sidebar-btn:hover {
+  background: rgba(168, 162, 158, 0.08);
+}
+ 
+.replay-sidebar-btn.is-selected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+ 
+.replay-sidebar-count {
+  margin-left: 10px;
+  padding: 2px 10px;
+  border-radius: 99px;
+  background: rgba(168, 162, 158, 0.14);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+}
+ 
+.replay-sidebar-btn.is-selected .replay-sidebar-count {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+ 
+.replay-sidebar-divider {
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+ 
+.replay-port-btn {
+  gap: 12px;
+}
+ 
+.replay-port-info {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+}
+ 
+.replay-status-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+ 
+.replay-status-dot.is-live {
+  background: var(--live);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
+}
+ 
+.replay-status-dot.is-offline {
+  background: #78716c;
+}
+ 
+.replay-port-label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+ 
+.replay-port-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+ 
+.replay-sidebar-btn.is-selected .replay-port-count {
+  color: var(--accent);
 }
