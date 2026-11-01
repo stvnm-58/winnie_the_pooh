@@ -256,29 +256,31 @@ export default function SessionReplay({ attacks, commands, activeHoneypots, form
 
             <hr className="replay-sidebar-divider" />
 
-            {/* Liste dynamique des ports */}
-            {availablePorts.map((port) => {
-              const isLive = (activeHoneypots || []).some(h => h.port === port);
-              const count = attackCountsByPort.get(port) || 0;
-              const isSelected = selectedPortFilter === String(port);
+            {/* Liste des ports défilante, comme celle du panneau Swarm du tableau de bord. */}
+            <div className="replay-port-scroll">
+              {availablePorts.map((port) => {
+                const isLive = (activeHoneypots || []).some(h => h.port === port);
+                const count = attackCountsByPort.get(port) || 0;
+                const isSelected = selectedPortFilter === String(port);
 
-              return (
-                <button
-                  key={port}
-                  onClick={() => handlePortFilterChange(String(port))}
-                  className={`replay-sidebar-btn replay-port-btn ${isSelected ? 'is-selected' : ''}`}
-                >
-                  <div className="replay-port-info">
-                    <span className={`replay-status-dot ${isLive ? 'is-live' : 'is-offline'}`}></span>
-                    <span className="replay-port-label">Port {port}</span>
-                  </div>
+                return (
+                  <button
+                    key={port}
+                    onClick={() => handlePortFilterChange(String(port))}
+                    className={`replay-sidebar-btn replay-port-btn ${isSelected ? 'is-selected' : ''}`}
+                  >
+                    <div className="replay-port-info">
+                      <span className={`replay-status-dot ${isLive ? 'is-live' : 'is-offline'}`}></span>
+                      <span className="replay-port-label">Port {port}</span>
+                    </div>
 
-                  <span className="replay-port-count">
-                    {count} session{count > 1 ? 's' : ''}
-                  </span>
-                </button>
-              );
-            })}
+                    <span className="replay-port-count">
+                      {count} session{count > 1 ? 's' : ''}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

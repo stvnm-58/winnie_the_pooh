@@ -6,3 +6,4 @@ server/data/*.db-shm
 server/data/*.db-wal
 server/data/banned_ips.json
 server/data/auth.json
+server/data/honeypot.db

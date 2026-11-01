@@ -25,6 +25,11 @@
   }
   .replay-sidebar-card {
     position: static;
+    max-height: none;
+  }
+  .replay-port-scroll {
+    flex: none;
+    max-height: 320px;
   }
 }
  
@@ -269,6 +274,9 @@
 .replay-sidebar-card {
   position: sticky;
   top: 24px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
 }
  
 .replay-sidebar-title {
@@ -283,8 +291,24 @@
  
 .replay-sidebar-list {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+}
+
+.replay-port-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: -3px 0 -3px -3px;
+  padding: 3px 8px 3px 3px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 162, 158, 0.35) transparent;
 }
  
 .replay-sidebar-btn {
