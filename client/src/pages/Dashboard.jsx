@@ -9,6 +9,19 @@ import {
 import useBannedIps from '../hooks/useBannedIps';
 import './Dashboard.css';
 
+// Nombre de caractères affichés pour l'utilisateur et le mot de passe dans le tableau.
+const MAX_CREDENTIAL_LENGTH = 10;
+
+// Raccourcit un texte trop long (les attaquants envoient parfois des chaînes énormes).
+function truncateText(value, maxLength = MAX_CREDENTIAL_LENGTH) {
+  const text = String(value ?? '');
+  if (text.length <= maxLength) return text;
+  let cut = text.slice(0, maxLength);
+  // Évite de couper un emoji ou un caractère rare en deux
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+  return `${cut}…`;
+}
+
 // Vue de surveillance : statistiques et flux d'attaques à gauche, filtre des honeypots à droite.
 export default function Dashboard({ 
   attacks, 
@@ -265,8 +278,20 @@ export default function Dashboard({
                             {att.country || 'Unknown'}
                           </span>
                         </td>
-                        <td onClick={() => handleRowClick(sessionKey)}>{att.username}</td>
-                        <td onClick={() => handleRowClick(sessionKey)}>{att.password}</td>
+                        <td
+                          onClick={() => handleRowClick(sessionKey)}
+                          className="dashboard-cred-cell"
+                          title={truncateText(att.username, 200)}
+                        >
+                          {truncateText(att.username)}
+                        </td>
+                        <td
+                          onClick={() => handleRowClick(sessionKey)}
+                          className="dashboard-cred-cell"
+                          title={truncateText(att.password, 200)}
+                        >
+                          {truncateText(att.password)}
+                        </td>
                         <td>
                           <button
                             onClick={(e) => {
