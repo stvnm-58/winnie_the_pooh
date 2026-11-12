@@ -117,8 +117,10 @@
 }
  
 .dashboard-table-wrapper table {
+  width: 100%;
   min-width: 760px;
   margin-top: 0;
+  table-layout: fixed; /* Force le tableau à respecter les largeurs de colonnes */
 }
  
 .dashboard-table-wrapper thead th {
@@ -135,8 +137,19 @@
   color: var(--text);
 }
  
+.dashboard-table-wrapper th,
+.dashboard-table-wrapper td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dashboard-table-wrapper td {
   color: var(--text-2);
+}
+
+.dashboard-cred-cell {
+  max-width: 120px;
 }
  
 .dashboard-empty-cell {
