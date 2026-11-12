@@ -372,6 +372,33 @@
   color: var(--accent);
 }
  
+/* --- STYLISATION DE L'ONGLET PARE-FEU / AUTO-BAN --- */
+.firewall-controls-wrapper,
+.firewall-config-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.firewall-input,
+.firewall-select {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.firewall-input:focus,
+.firewall-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* Sous 1100 px, le panneau Swarm passe au-dessus du contenu et cesse d'être collant. */
  
 @media (max-width: 1100px) {
